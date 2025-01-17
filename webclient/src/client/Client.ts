@@ -6954,8 +6954,9 @@ export class Client extends GameShell {
 
             await this.logout();
         } catch (e) {
+            // todo: support reconnecting if there was an IO error
             console.error(e);
-            await this.tryReconnect();
+            await this.logout();
         }
 
         return true;
