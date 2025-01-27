@@ -722,6 +722,13 @@ export default abstract class GameShell {
             return;
         }
 
+        if (e.touches.length > 1) {
+            // allow multiple touch points to scroll on the page instead
+            return;
+        }
+
+        e.preventDefault();
+
         const touch: Touch = e.changedTouches[0];
         const clientX: number = touch.clientX | 0;
         const clientY: number = touch.clientY | 0;
