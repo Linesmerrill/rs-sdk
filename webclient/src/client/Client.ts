@@ -504,6 +504,8 @@ export class Client extends GameShell {
     protected midiSize: number = 0;
     protected midiVolume: number = 32;
 
+    protected displayFps: boolean = true;
+
     constructor(nodeid?: number, portoff?: number, lowmem?: boolean, members?: boolean) {
         super();
 
@@ -3377,6 +3379,29 @@ export class Client extends GameShell {
             this.fontPlain12?.drawStringCenter(484, 329, 'Arena', Colors.YELLOW);
         }
 
+        if (this.displayFps) {
+            let x: number = 507;
+            let y: number = 20;
+
+            let color: number = Colors.YELLOW;
+            if (this.fps < 15) {
+                color = Colors.RED;
+            }
+
+            this.fontPlain12?.drawStringRight(x, y, 'Fps:' + this.fps, color);
+            y += 15;
+
+            let memoryUsage = -1;
+            if (typeof window.performance['memory' as keyof Performance] !== 'undefined') {
+                const memory = window.performance['memory' as keyof Performance] as any;
+                memoryUsage = (memory.usedJSHeapSize / 1024) | 0;
+            }
+
+            if (memoryUsage !== -1) {
+                this.fontPlain12?.drawStringRight(x, y, 'Mem:' + memoryUsage + "k", Colors.YELLOW);
+            }
+        }
+
         if (this.systemUpdateTimer !== 0) {
             let seconds: number = (this.systemUpdateTimer / 50) | 0;
             const minutes: number = (seconds / 60) | 0;
@@ -5242,14 +5267,18 @@ export class Client extends GameShell {
 
                         if ((key === 13 || key === 10) && this.chatTyped.length > 0) {
                             if (this.chatTyped.startsWith('::')) {
-                                if (this.chatTyped.startsWith("::fps")) {
-                                    // ::fps command for setting a target framerate.
+                                if (this.chatTyped === '::fpson') {
+                                    // authentic
+                                    this.displayFps = true;
+                                } else if (this.chatTyped === '::fpsoff') {
+                                    // authentic
+                                    this.displayFps = false;
+                                } else if (this.chatTyped.startsWith("::fps ")) {
+                                    // custom ::fps command for setting a target framerate
                                     try {
-                                        // Default to 50 if NaN
-                                        const desiredFps = parseInt(this.chatTyped.substr(6)) || 50;
+                                        const desiredFps = parseInt(this.chatTyped.substring(6)) || 50;
                                         this.setTargetedFramerate(desiredFps);
                                     } catch (e) {
-                                        // Message user? Just ignore? Probably just ignore. It's a trivial command.
                                     }
                                 } else {
                                     // CLIENT_CHEAT
