@@ -20,7 +20,7 @@ shadowed=yes
 text=Click the tune to play.
 colour=0xFFFF00
 
-[com_25]
+[adventure]
 layer=com_0
 type=text
 x=10
@@ -36,7 +36,7 @@ text=Adventure
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_26]
+[al_kharid]
 layer=com_0
 type=text
 x=10
@@ -52,7 +52,7 @@ text=Al Kharid
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_27]
+[alone]
 layer=com_0
 type=text
 x=10
@@ -68,7 +68,7 @@ text=Alone
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_28]
+[ambient_jungle]
 layer=com_0
 type=text
 x=10
@@ -84,7 +84,7 @@ text=Ambient Jungle
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_29]
+[arabian]
 layer=com_0
 type=text
 x=10
@@ -100,7 +100,7 @@ text=Arabian
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_30]
+[arabian2]
 layer=com_0
 type=text
 x=10
@@ -116,7 +116,7 @@ text=Arabian2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_31]
+[arabian3]
 layer=com_0
 type=text
 x=10
@@ -132,7 +132,7 @@ text=Arabian3
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_32]
+[arabique]
 layer=com_0
 type=text
 x=10
@@ -148,7 +148,7 @@ text=Arabique
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_33]
+[army_of_darkness]
 layer=com_0
 type=text
 x=10
@@ -164,7 +164,7 @@ text=Army Of Darkness
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_34]
+[arrival]
 layer=com_0
 type=text
 x=10
@@ -180,7 +180,7 @@ text=Arrival
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_35]
+[attack1]
 layer=com_0
 type=text
 x=10
@@ -196,7 +196,7 @@ text=Attack1
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_36]
+[attack2]
 layer=com_0
 type=text
 x=10
@@ -212,7 +212,7 @@ text=Attack2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_37]
+[attack3]
 layer=com_0
 type=text
 x=10
@@ -228,7 +228,7 @@ text=Attack3
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_38]
+[attack4]
 layer=com_0
 type=text
 x=10
@@ -244,7 +244,7 @@ text=Attack4
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_39]
+[attack5]
 layer=com_0
 type=text
 x=10
@@ -260,7 +260,7 @@ text=Attack5
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_40]
+[attack6]
 layer=com_0
 type=text
 x=10
@@ -276,7 +276,7 @@ text=Attack6
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_41]
+[attention]
 layer=com_0
 type=text
 x=10
@@ -292,7 +292,7 @@ text=Attention
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_42]
+[autumn_voyage]
 layer=com_0
 type=text
 x=10
@@ -308,7 +308,7 @@ text=Autumn Voyage
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_43]
+[background2]
 layer=com_0
 type=text
 x=10
@@ -324,7 +324,7 @@ text=Background2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_44]
+[ballad_of_enchantment]
 layer=com_0
 type=text
 x=10
@@ -340,7 +340,7 @@ text=Ballad Of Enchantment
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_45]
+[baroque]
 layer=com_0
 type=text
 x=10
@@ -356,7 +356,7 @@ text=Baroque
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_46]
+[beyond]
 layer=com_0
 type=text
 x=10
@@ -372,7 +372,7 @@ text=Beyond
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_47]
+[big_chords]
 layer=com_0
 type=text
 x=10
@@ -388,7 +388,7 @@ text=Big Chords
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_48]
+[book_of_spells]
 layer=com_0
 type=text
 x=10
@@ -404,7 +404,7 @@ text=Book Of Spells
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_49]
+[camelot]
 layer=com_0
 type=text
 x=10
@@ -420,7 +420,7 @@ text=Camelot
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_50]
+[cave_background1]
 layer=com_0
 type=text
 x=10
@@ -436,7 +436,7 @@ text=Cave Background1
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_51]
+[cavern]
 layer=com_0
 type=text
 x=10
@@ -452,7 +452,7 @@ text=Cavern
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_52]
+[chain_of_command]
 layer=com_0
 type=text
 x=10
@@ -468,7 +468,7 @@ text=Chain Of Command
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_53]
+[crystal_cave]
 layer=com_0
 type=text
 x=10
@@ -484,7 +484,7 @@ text=Crystal Cave
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_54]
+[crystal_sword]
 layer=com_0
 type=text
 x=10
@@ -500,7 +500,7 @@ text=Crystal Sword
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_55]
+[dangerous]
 layer=com_0
 type=text
 x=10
@@ -516,7 +516,7 @@ text=Dangerous
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_56]
+[dark2]
 layer=com_0
 type=text
 x=10
@@ -532,7 +532,7 @@ text=Dark2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_57]
+[deep_wildy]
 layer=com_0
 type=text
 x=10
@@ -548,7 +548,7 @@ text=Deep Wildy
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_58]
+[desert_voyage]
 layer=com_0
 type=text
 x=10
@@ -564,7 +564,7 @@ text=Desert Voyage
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_59]
+[doorways]
 layer=com_0
 type=text
 x=10
@@ -580,7 +580,7 @@ text=Doorways
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_60]
+[dream1]
 layer=com_0
 type=text
 x=10
@@ -596,7 +596,7 @@ text=Dream1
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_61]
+[dunjun]
 layer=com_0
 type=text
 x=10
@@ -612,7 +612,7 @@ text=Dunjun
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_62]
+[egypt]
 layer=com_0
 type=text
 x=10
@@ -628,7 +628,7 @@ text=Egypt
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_63]
+[emotion]
 layer=com_0
 type=text
 x=10
@@ -644,7 +644,7 @@ text=Emotion
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_64]
+[expanse]
 layer=com_0
 type=text
 x=10
@@ -660,7 +660,7 @@ text=Expanse
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_65]
+[expecting]
 layer=com_0
 type=text
 x=10
@@ -676,7 +676,7 @@ text=Expecting
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_66]
+[faerie]
 layer=com_0
 type=text
 x=10
@@ -692,7 +692,7 @@ text=Faerie
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_67]
+[fanfare]
 layer=com_0
 type=text
 x=10
@@ -708,7 +708,7 @@ text=Fanfare
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_68]
+[fanfare2]
 layer=com_0
 type=text
 x=10
@@ -724,7 +724,7 @@ text=Fanfare2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_69]
+[fanfare3]
 layer=com_0
 type=text
 x=10
@@ -740,7 +740,7 @@ text=Fanfare3
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_70]
+[fishing]
 layer=com_0
 type=text
 x=10
@@ -756,7 +756,7 @@ text=Fishing
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_71]
+[flute_salad]
 layer=com_0
 type=text
 x=10
@@ -772,7 +772,7 @@ text=Flute Salad
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_72]
+[forever]
 layer=com_0
 type=text
 x=10
@@ -788,7 +788,7 @@ text=Forever
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_73]
+[gaol]
 layer=com_0
 type=text
 x=10
@@ -804,7 +804,7 @@ text=Gaol
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_74]
+[garden]
 layer=com_0
 type=text
 x=10
@@ -820,7 +820,7 @@ text=Garden
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_75]
+[gnome_king]
 layer=com_0
 type=text
 x=10
@@ -836,7 +836,7 @@ text=Gnome King
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_76]
+[gnome_theme]
 layer=com_0
 type=text
 x=10
@@ -852,7 +852,7 @@ text=Gnome Theme
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_77]
+[gnome_village]
 layer=com_0
 type=text
 x=10
@@ -868,7 +868,7 @@ text=Gnome Village
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_78]
+[gnome_village2]
 layer=com_0
 type=text
 x=10
@@ -884,7 +884,7 @@ text=Gnome Village2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_79]
+[gnome]
 layer=com_0
 type=text
 x=10
@@ -900,7 +900,7 @@ text=Gnome
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_80]
+[gnomeball]
 layer=com_0
 type=text
 x=10
@@ -916,7 +916,7 @@ text=Gnomeball
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_81]
+[greatness]
 layer=com_0
 type=text
 x=10
@@ -932,7 +932,7 @@ text=Greatness
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_82]
+[harmony]
 layer=com_0
 type=text
 x=10
@@ -948,7 +948,7 @@ text=Harmony
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_83]
+[high_seas]
 layer=com_0
 type=text
 x=10
@@ -964,7 +964,7 @@ text=High Seas
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_84]
+[horizon]
 layer=com_0
 type=text
 x=10
@@ -980,7 +980,7 @@ text=Horizon
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_85]
+[iban]
 layer=com_0
 type=text
 x=10
@@ -996,7 +996,7 @@ text=Iban
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_86]
+[in_the_manor]
 layer=com_0
 type=text
 x=10
@@ -1012,7 +1012,7 @@ text=In The Manor
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_87]
+[inspiration]
 layer=com_0
 type=text
 x=10
@@ -1028,7 +1028,7 @@ text=Inspiration
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_88]
+[intrepid]
 layer=com_0
 type=text
 x=10
@@ -1044,7 +1044,7 @@ text=Intrepid
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_89]
+[jollyr]
 layer=com_0
 type=text
 x=10
@@ -1060,7 +1060,7 @@ text=Jolly-R
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_90]
+[jungle_island]
 layer=com_0
 type=text
 x=10
@@ -1076,7 +1076,7 @@ text=Jungle Island
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_91]
+[jungly1]
 layer=com_0
 type=text
 x=10
@@ -1092,7 +1092,7 @@ text=Jungly1
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_92]
+[jungly2]
 layer=com_0
 type=text
 x=10
@@ -1108,7 +1108,7 @@ text=Jungly2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_93]
+[jungly3]
 layer=com_0
 type=text
 x=10
@@ -1124,7 +1124,7 @@ text=Jungly3
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_94]
+[knightly]
 layer=com_0
 type=text
 x=10
@@ -1140,7 +1140,7 @@ text=Knightly
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_95]
+[lasting]
 layer=com_0
 type=text
 x=10
@@ -1156,7 +1156,7 @@ text=Lasting
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_96]
+[legion]
 layer=com_0
 type=text
 x=10
@@ -1172,7 +1172,7 @@ text=Legion
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_97]
+[lightness]
 layer=com_0
 type=text
 x=10
@@ -1188,7 +1188,7 @@ text=Lightness
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_98]
+[lightwalk]
 layer=com_0
 type=text
 x=10
@@ -1204,7 +1204,7 @@ text=Lightwalk
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_99]
+[long_ago]
 layer=com_0
 type=text
 x=10
@@ -1220,7 +1220,7 @@ text=Long Ago
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_100]
+[long_way_home]
 layer=com_0
 type=text
 x=10
@@ -1236,7 +1236,7 @@ text=Long Way Home
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_101]
+[march2]
 layer=com_0
 type=text
 x=10
@@ -1252,7 +1252,7 @@ text=March2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_102]
+[lullaby]
 layer=com_0
 type=text
 x=10
@@ -1268,7 +1268,7 @@ text=Lullaby
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_103]
+[mage_arena]
 layer=com_0
 type=text
 x=10
@@ -1284,7 +1284,7 @@ text=Mage Arena
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_104]
+[magic_dance]
 layer=com_0
 type=text
 x=10
@@ -1300,7 +1300,7 @@ text=Magic Dance
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_105]
+[magical_journey]
 layer=com_0
 type=text
 x=10
@@ -1316,7 +1316,7 @@ text=Magical Journey
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_106]
+[medieval]
 layer=com_0
 type=text
 x=10
@@ -1332,7 +1332,7 @@ text=Medieval
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_107]
+[mellow]
 layer=com_0
 type=text
 x=10
@@ -1348,7 +1348,7 @@ text=Mellow
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_108]
+[miles_away]
 layer=com_0
 type=text
 x=10
@@ -1364,7 +1364,7 @@ text=Miles Away
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_109]
+[miracle_dance]
 layer=com_0
 type=text
 x=10
@@ -1380,7 +1380,7 @@ text=Miracle Dance
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_110]
+[monarch_waltz]
 layer=com_0
 type=text
 x=10
@@ -1396,7 +1396,7 @@ text=Monarch Waltz
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_111]
+[moody]
 layer=com_0
 type=text
 x=10
@@ -1412,7 +1412,7 @@ text=Moody
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_112]
+[neverland]
 layer=com_0
 type=text
 x=10
@@ -1428,7 +1428,7 @@ text=Neverland
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_113]
+[newbie_melody]
 layer=com_0
 type=text
 x=10
@@ -1442,7 +1442,7 @@ text=Newbie Melody
 colour=0x00FF00
 activecolour=0x00FF00
 
-[com_114]
+[nightfall]
 layer=com_0
 type=text
 x=10
@@ -1458,7 +1458,7 @@ text=Nightfall
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_115]
+[oriental]
 layer=com_0
 type=text
 x=10
@@ -1474,7 +1474,7 @@ text=Oriental
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_116]
+[overture]
 layer=com_0
 type=text
 x=10
@@ -1490,7 +1490,7 @@ text=Overture
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_117]
+[parade]
 layer=com_0
 type=text
 x=10
@@ -1506,7 +1506,7 @@ text=Parade
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_118]
+[quest]
 layer=com_0
 type=text
 x=10
@@ -1522,7 +1522,7 @@ text=Quest
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_119]
+[regal2]
 layer=com_0
 type=text
 x=10
@@ -1538,7 +1538,7 @@ text=Regal2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_120]
+[reggae]
 layer=com_0
 type=text
 x=10
@@ -1554,7 +1554,7 @@ text=Reggae
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_121]
+[reggae2]
 layer=com_0
 type=text
 x=10
@@ -1570,7 +1570,7 @@ text=Reggae2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_122]
+[riverside]
 layer=com_0
 type=text
 x=10
@@ -1586,7 +1586,7 @@ text=Riverside
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_123]
+[royale]
 layer=com_0
 type=text
 x=10
@@ -1602,7 +1602,7 @@ text=Royale
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_124]
+[rune_essence]
 layer=com_0
 type=text
 x=10
@@ -1618,7 +1618,7 @@ text=Rune Essence
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_125]
+[sad_meadow]
 layer=com_0
 type=text
 x=10
@@ -1634,7 +1634,7 @@ text=Sad Meadow
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_126]
+[scape_cave]
 layer=com_0
 type=text
 x=10
@@ -1650,7 +1650,7 @@ text=Scape Cave
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_127]
+[scape_main]
 layer=com_0
 type=text
 x=10
@@ -1664,7 +1664,7 @@ text=Scape Main
 colour=0x00FF00
 activecolour=0x00FF00
 
-[com_128]
+[scape_sad1]
 layer=com_0
 type=text
 x=10
@@ -1680,7 +1680,7 @@ text=Scape Sad1
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_129]
+[scape_wild1]
 layer=com_0
 type=text
 x=10
@@ -1696,7 +1696,7 @@ text=Scape Wild1
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_130]
+[sea_shanty]
 layer=com_0
 type=text
 x=10
@@ -1712,7 +1712,7 @@ text=Sea Shanty
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_131]
+[sea_shanty2]
 layer=com_0
 type=text
 x=10
@@ -1728,7 +1728,7 @@ text=Sea Shanty2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_132]
+[serenade]
 layer=com_0
 type=text
 x=10
@@ -1744,7 +1744,7 @@ text=Serenade
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_133]
+[serene]
 layer=com_0
 type=text
 x=10
@@ -1760,7 +1760,7 @@ text=Serene
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_134]
+[shine]
 layer=com_0
 type=text
 x=10
@@ -1776,7 +1776,7 @@ text=Shine
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_135]
+[soundscape]
 layer=com_0
 type=text
 x=10
@@ -1792,7 +1792,7 @@ text=Soundscape
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_136]
+[spirit]
 layer=com_0
 type=text
 x=10
@@ -1808,7 +1808,7 @@ text=Spirit
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_137]
+[splendour]
 layer=com_0
 type=text
 x=10
@@ -1824,7 +1824,7 @@ text=Splendour
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_138]
+[spooky2]
 layer=com_0
 type=text
 x=10
@@ -1840,7 +1840,7 @@ text=Spooky2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_139]
+[spooky_jungle]
 layer=com_0
 type=text
 x=10
@@ -1856,7 +1856,7 @@ text=Spooky Jungle
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_140]
+[starlight]
 layer=com_0
 type=text
 x=10
@@ -1872,7 +1872,7 @@ text=Starlight
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_141]
+[still_night]
 layer=com_0
 type=text
 x=10
@@ -1888,7 +1888,7 @@ text=Still Night
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_142]
+[the_desert]
 layer=com_0
 type=text
 x=10
@@ -1904,7 +1904,7 @@ text=The Desert
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_143]
+[the_shadow]
 layer=com_0
 type=text
 x=10
@@ -1920,7 +1920,7 @@ text=The Shadow
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_144]
+[the_tower]
 layer=com_0
 type=text
 x=10
@@ -1936,7 +1936,7 @@ text=The Tower
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_145]
+[trawler]
 layer=com_0
 type=text
 x=10
@@ -1952,7 +1952,7 @@ text=Trawler
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_146]
+[trawler_minor]
 layer=com_0
 type=text
 x=10
@@ -1968,7 +1968,7 @@ text=Trawler Minor
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_147]
+[tree_spirits]
 layer=com_0
 type=text
 x=10
@@ -1984,7 +1984,7 @@ text=Tree Spirits
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_148]
+[tribal_background]
 layer=com_0
 type=text
 x=10
@@ -2000,7 +2000,7 @@ text=Tribal Background
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_149]
+[tribal]
 layer=com_0
 type=text
 x=10
@@ -2016,7 +2016,7 @@ text=Tribal
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_150]
+[tribal2]
 layer=com_0
 type=text
 x=10
@@ -2032,7 +2032,7 @@ text=Tribal2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_151]
+[trinity]
 layer=com_0
 type=text
 x=10
@@ -2048,7 +2048,7 @@ text=Trinity
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_152]
+[troubled]
 layer=com_0
 type=text
 x=10
@@ -2064,7 +2064,7 @@ text=Troubled
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_153]
+[underground]
 layer=com_0
 type=text
 x=10
@@ -2080,7 +2080,7 @@ text=Underground
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_156]
+[unknown_land]
 layer=com_0
 type=text
 x=10
@@ -2096,7 +2096,7 @@ text=Unknown Land
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_157]
+[underground_pass]
 layer=com_0
 type=text
 x=10
@@ -2112,7 +2112,7 @@ text=Underground Pass
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_158]
+[upcoming]
 layer=com_0
 type=text
 x=10
@@ -2128,7 +2128,7 @@ text=Upcoming
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_159]
+[venture]
 layer=com_0
 type=text
 x=10
@@ -2144,7 +2144,7 @@ text=Venture
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_160]
+[vision]
 layer=com_0
 type=text
 x=10
@@ -2160,7 +2160,7 @@ text=Vision
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_161]
+[voodoo_cult]
 layer=com_0
 type=text
 x=10
@@ -2176,7 +2176,7 @@ text=Voodoo Cult
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_162]
+[voyage]
 layer=com_0
 type=text
 x=10
@@ -2192,7 +2192,7 @@ text=Voyage
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_163]
+[wander]
 layer=com_0
 type=text
 x=10
@@ -2208,7 +2208,7 @@ text=Wander
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_164]
+[waterfall]
 layer=com_0
 type=text
 x=10
@@ -2224,7 +2224,7 @@ text=Waterfall
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_165]
+[wilderness2]
 layer=com_0
 type=text
 x=10
@@ -2240,7 +2240,7 @@ text=Wilderness2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_166]
+[wilderness3]
 layer=com_0
 type=text
 x=10
@@ -2256,7 +2256,7 @@ text=Wilderness3
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_167]
+[wilderness4]
 layer=com_0
 type=text
 x=10
@@ -2272,7 +2272,7 @@ text=Wilderness4
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_168]
+[witching]
 layer=com_0
 type=text
 x=10
@@ -2288,7 +2288,7 @@ text=Witching
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_169]
+[wonder]
 layer=com_0
 type=text
 x=10
@@ -2304,7 +2304,7 @@ text=Wonder
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_170]
+[wonderous]
 layer=com_0
 type=text
 x=10
@@ -2320,7 +2320,7 @@ text=Wonderous
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_171]
+[workshop]
 layer=com_0
 type=text
 x=10
@@ -2336,7 +2336,7 @@ text=Workshop
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_172]
+[start]
 layer=com_0
 type=text
 x=10
@@ -2352,7 +2352,7 @@ text=Start
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_173]
+[talking_forest]
 layer=com_0
 type=text
 x=10
@@ -2368,7 +2368,7 @@ text=Talking Forest
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_174]
+[theme]
 layer=com_0
 type=text
 x=10
@@ -2384,7 +2384,7 @@ text=Theme
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_175]
+[expedition]
 layer=com_0
 type=text
 x=10
@@ -2412,7 +2412,7 @@ shadowed=yes
 text=Green=Unlocked
 colour=0x00FF00
 
-[com_179]
+[emperor]
 layer=com_0
 type=text
 x=10
@@ -2428,7 +2428,7 @@ text=Emperor
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_184]
+[scape_soft]
 layer=com_0
 type=text
 x=10
@@ -2444,7 +2444,7 @@ text=Scape Soft
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_185]
+[yesteryear]
 layer=com_0
 type=text
 x=10
@@ -2460,7 +2460,7 @@ text=Yesteryear
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_186]
+[shining]
 layer=com_0
 type=text
 x=10
@@ -2476,7 +2476,7 @@ text=Shining
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_187]
+[lonesome]
 layer=com_0
 type=text
 x=10
@@ -2492,7 +2492,7 @@ text=Lonesome
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_188]
+[tomorrow]
 layer=com_0
 type=text
 x=10
@@ -2508,7 +2508,7 @@ text=Tomorrow
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_189]
+[duel_arena]
 layer=com_0
 type=text
 x=10
@@ -2524,7 +2524,7 @@ text=Duel Arena
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_190]
+[ice_melody]
 layer=com_0
 type=text
 x=10
@@ -2540,7 +2540,7 @@ text=Ice Melody
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_191]
+[wolf_mountain]
 layer=com_0
 type=text
 x=10
@@ -2556,7 +2556,7 @@ text=Wolf Mountain
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_192]
+[harmony2]
 layer=com_0
 type=text
 x=10
@@ -2572,7 +2572,7 @@ text=Harmony2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_193]
+[venture2]
 layer=com_0
 type=text
 x=10
@@ -2588,7 +2588,7 @@ text=Venture2
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_194]
+[landlubber]
 layer=com_0
 type=text
 x=10
@@ -2604,7 +2604,7 @@ text=Landlubber
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_195]
+[undercurrent]
 layer=com_0
 type=text
 x=10
@@ -2620,7 +2620,7 @@ text=Undercurrent
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_196]
+[zealot]
 layer=com_0
 type=text
 x=10
@@ -2636,7 +2636,7 @@ text=Zealot
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_197]
+[cellar_song1]
 layer=com_0
 type=text
 x=10
@@ -2652,7 +2652,7 @@ text=Cellar Song1
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_198]
+[escape]
 layer=com_0
 type=text
 x=10
@@ -2668,7 +2668,7 @@ text=Escape
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_199]
+[close_quarters]
 layer=com_0
 type=text
 x=10
@@ -2684,7 +2684,7 @@ text=Close Quarters
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_200]
+[heart_and_mind]
 layer=com_0
 type=text
 x=10
@@ -2700,7 +2700,7 @@ text=Heart and Mind
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_201]
+[nomad]
 layer=com_0
 type=text
 x=10
@@ -2716,7 +2716,7 @@ text=Nomad
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_202]
+[chompy_hunt]
 layer=com_0
 type=text
 x=10
@@ -2732,7 +2732,7 @@ text=Chompy Hunt
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_203]
+[grumpy]
 layer=com_0
 type=text
 x=10
@@ -2748,7 +2748,7 @@ text=Grumpy
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_204]
+[forbidden]
 layer=com_0
 type=text
 x=10
@@ -2764,7 +2764,7 @@ text=Forbidden
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_205]
+[cursed]
 layer=com_0
 type=text
 x=10
@@ -2780,7 +2780,7 @@ text=Cursed
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_206]
+[understanding]
 layer=com_0
 type=text
 x=10
@@ -2796,7 +2796,7 @@ text=Understanding
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_207]
+[stratosphere]
 layer=com_0
 type=text
 x=10
@@ -2812,7 +2812,7 @@ text=Stratosphere
 colour=0xFF0000
 activecolour=0x00FF00
 
-[com_208]
+[twilight]
 layer=com_0
 type=text
 x=10
