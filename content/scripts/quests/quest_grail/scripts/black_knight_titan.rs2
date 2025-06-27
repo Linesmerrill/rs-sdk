@@ -10,19 +10,17 @@ switch_int(~p_choice2("Ok, have at ye oh evil knight!", 1, "Actually I think I'l
 [ai_queue3,black_knight_titan]
 if(finduid(%npc_aggressive_player) = true) {
     if_close;
-    if(p_finduid(uid) = true) { 
-        @defeat_titan;
-    }
     queue(queue_defeat_titan, 0, npc_uid); //strongqueue probably
 } else {
     npc_statheal(hitpoints, 0, 100);
 }
 
 [queue,queue_defeat_titan](npc_uid $npc)
-if(inzone(0_41_73_0_0, 2_43_73_63_63, coord) = false) { // doesn't run if you've teleported out
-    return;
-}
 if (npc_finduid($npc) = true) {
+    if(distance(coord, npc_coord) > 11) {
+        gosub(npc_death);
+        return;
+    }
     @defeat_titan;
 }
 
