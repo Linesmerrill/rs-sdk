@@ -6220,7 +6220,7 @@ export class Client extends GameShell {
                     }
                 }
 
-                if (displayName && this.friendCount < 100) {
+                if (displayName && this.friendCount < 200) {
                     this.friendName37[this.friendCount] = username;
                     this.friendName[this.friendCount] = displayName;
                     this.friendWorld[this.friendCount] = world;
@@ -10014,7 +10014,6 @@ export class Client extends GameShell {
     private handleSocialMenuOption(component: Component): boolean {
         let clientCode: number = component.clientCode;
 
-        // if (clientCode >= 1 && clientCode <= 200 || !(clientCode < 701 || clientCode > 900)) {
         if ((clientCode >= ClientCode.CC_FRIENDS_START && clientCode <= ClientCode.CC_FRIENDS_UPDATE_END) || (clientCode >= 701 && clientCode <= 900)) {
             if (clientCode >= 801) {
                 clientCode -= 701;
