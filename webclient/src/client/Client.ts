@@ -1165,7 +1165,7 @@ export class Client extends GameShell {
         } catch (err) {
         }
 
-        if (data && Packet.crc32(data) !== crc) {
+        if (data && Packet.getcrc(data, 0, data.length) !== crc) {
             data = undefined;
         }
 
@@ -1180,7 +1180,7 @@ export class Client extends GameShell {
             try {
                 data = await downloadUrl(`/${filename}${crc}`);
 
-                const checksum = Packet.crc32(data);
+                const checksum = Packet.getcrc(data, 0, data.length);
                 if (crc === checksum) {
                     try {
                         if (this.db) {
