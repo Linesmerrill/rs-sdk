@@ -1,5 +1,5 @@
 [opnpc1,straven]
-if(%phoenixgang_progress >= ^phoenixgang_complete) {
+if(%phoenixgang_progress >= ^phoenixgang_joined) {
     @straven_gangmember;
 } else if(%blackarmgang_progress >= ^blackarmgang_joined) {
     @straven_blackarmdog;
