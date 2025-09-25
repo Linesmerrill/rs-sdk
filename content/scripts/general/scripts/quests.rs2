@@ -283,6 +283,7 @@ if (testbit(%upass_map_mechanisms, ^upass_started_bit) = ^true & %upass_progress
 ~send_quest_progress_colour(questlist:itwatchtower, %itwatchtower_progress, ^itwatchtower_complete);
 ~send_quest_progress_colour(questlist:legends, %legends_progress, ^legends_complete);
 ~send_quest_progress_colour(questlist:elemental_workshop, %elemental_workshop_bits, sub(pow(2, ^elemental_workshop_complete), 1));
+~send_quest_progress_colour(questlist:priestperil, %priestperil, ^priestperil_complete);
 if_settab(questlist, ^tab_quest_journal);
 
 if (%drunkmonk_progress >= ^drunkmonk_spoken_to_omad) {
