@@ -75,6 +75,18 @@ export const Items = {
     NEEDLE: 1733,
     THREAD: 1734,
 
+    // Herblore
+    GUAM_LEAF: 249,          // Clean guam leaf
+    EYE_OF_NEWT: 221,        // Secondary ingredient for attack potion
+    VIAL_OF_WATER: 227,      // Base for unfinished potions
+    GUAM_POTION_UNF: 91,     // Unfinished guam potion
+    ATTACK_POTION_3: 121,    // 3-dose attack potion
+
+    // Runecrafting
+    RUNE_ESSENCE: 1436,      // Basic essence for crafting runes
+    PURE_ESSENCE: 7936,      // Pure essence (for higher runes)
+    AIR_TALISMAN: 1438,      // Talisman to enter air altar
+
     // Other
     COINS: 995,
     BUCKET: 1925,
