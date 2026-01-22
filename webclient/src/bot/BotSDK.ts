@@ -664,6 +664,7 @@ export class BotStateCollector {
         const messageText = c.messageText || [];
         const messageSender = c.messageSender || [];
         const messageType = c.messageType || [];
+        const messageTick = c.messageTick || [];
 
         // Get the 5 most recent messages (index 0 is most recent)
         for (let i = 0; i < 5; i++) {
@@ -672,7 +673,8 @@ export class BotStateCollector {
                 messages.push({
                     type: messageType[i] || 0,
                     text: text,
-                    sender: messageSender[i] || ''
+                    sender: messageSender[i] || '',
+                    tick: messageTick[i] || 0
                 });
             }
         }
@@ -1124,7 +1126,7 @@ export class BotOverlay {
     private content: HTMLPreElement;
     private collector: BotStateCollector;
     private visible: boolean = true;
-    private minimized: boolean = false;
+    private minimized: boolean = true;
     private client: Client;
 
     // Packet log panel
@@ -1149,7 +1151,7 @@ export class BotOverlay {
             top: 10px;
             right: 10px;
             width: 320px;
-            max-height: 600px;
+            max-height: auto;
             background: rgba(0, 0, 0, 0.85);
             border: 2px solid #04A800;
             border-radius: 8px;
@@ -1192,6 +1194,7 @@ export class BotOverlay {
             max-height: 540px;
             white-space: pre-wrap;
             word-wrap: break-word;
+            display: none;
         `;
 
         this.container.appendChild(header);

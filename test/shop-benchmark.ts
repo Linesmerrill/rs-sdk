@@ -1,107 +1,102 @@
 #!/usr/bin/env bun
-// Shop Test - buy a hammer from the general store
+/**
+ * Shop Test (SDK)
+ * Sell the bronze dagger to get coins, then buy a hammer.
+ */
 
-import { setupBotWithTutorialSkip, sleep, type BotSession } from './utils/skip_tutorial';
+import { launchBotWithSDK, sleep, type SDKSession } from './utils/browser';
 
 const BOT_NAME = process.env.BOT_NAME;
 const SHOP_LOCATION = { x: 3212, z: 3246 };
 
-let rsbot: (...args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
-
-async function getPosition(): Promise<{ x: number; z: number } | null> {
-    const result = await rsbot('player');
-    const match = result.stdout.match(/Position:\s*\((\d+),\s*(\d+)\)/);
-    return match?.[1] && match[2] ? { x: parseInt(match[1]), z: parseInt(match[2]) } : null;
-}
-
-async function getInventory(): Promise<any[]> {
-    const result = await rsbot('inventory');
-    const items: any[] = [];
-    for (const line of result.stdout.split('\n')) {
-        const match = line.match(/^\s*\[(\d+)\]\s*(.+?)\s*x(\d+)\s*\(id:\s*(\d+)\)/);
-        if (match?.[1] && match[2] && match[4]) {
-            items.push({ slot: parseInt(match[1]), name: match[2].trim(), id: parseInt(match[4]) });
-        }
-    }
-    return items;
-}
-
-async function getNpcs(): Promise<any[]> {
-    const result = await rsbot('npcs');
-    const npcs: any[] = [];
-    for (const line of result.stdout.split('\n')) {
-        const match = line.match(/^\s*\[(\d+)\]\s*(.+?)\s+at.*?-\s*(\d+)\s*tiles/);
-        if (match?.[1] && match[2] && match[3]) {
-            npcs.push({ index: parseInt(match[1]), name: match[2].trim(), distance: parseInt(match[3]) });
-        }
-    }
-    return npcs;
-}
-
-async function isShopOpen(): Promise<boolean> {
-    const result = await rsbot('shop');
-    return result.stdout.includes('Shop:') && !result.stdout.includes('not open');
-}
-
 async function runTest(): Promise<boolean> {
-    console.log('=== Shop Test ===');
+    console.log('=== Shop Test (SDK) ===');
+    console.log('Goal: Sell dagger, buy hammer');
 
-    let session: BotSession | null = null;
+    let session: SDKSession | null = null;
     try {
-        session = await setupBotWithTutorialSkip(BOT_NAME);
-        rsbot = session.rsbotCompat;
-        console.log(`Bot ${session.botName} ready!`);
+        session = await launchBotWithSDK(BOT_NAME, { headless: false });
+        const { sdk, bot } = session;
+        console.log(`Bot '${session.botName}' ready!`);
 
         // Check if we already have a hammer
-        let inventory = await getInventory();
-        if (inventory.find(i => /hammer/i.test(i.name))) {
+        if (sdk.findInventoryItem(/hammer/i)) {
             console.log('Already have hammer!');
             return true;
         }
 
+        // Verify we have a dagger to sell
+        const dagger = sdk.findInventoryItem(/dagger/i);
+        if (!dagger) {
+            console.log('ERROR: No dagger in inventory to sell');
+            return false;
+        }
+        console.log(`Have ${dagger.name} to sell`);
+
         // Walk to shop
         console.log('Walking to shop...');
-        await rsbot('action', 'walk', SHOP_LOCATION.x.toString(), SHOP_LOCATION.z.toString(), '--run', '--wait');
-        await sleep(1000);
+        await bot.walkTo(SHOP_LOCATION.x, SHOP_LOCATION.z, 3);
 
-        // Find and trade with shopkeeper
-        for (let attempt = 0; attempt < 20; attempt++) {
-            const npcs = await getNpcs();
-            const shopkeeper = npcs.find(n => /shopkeeper|shop keeper/i.test(n.name));
+        // Open shop
+        console.log('Opening shop...');
+        const openResult = await bot.openShop(/shop\s*keeper/i);
+        if (!openResult.success) {
+            console.log(`Failed to open shop: ${openResult.message}`);
+            return false;
+        }
+        console.log(openResult.message);
 
-            if (shopkeeper) {
-                console.log('Trading with shopkeeper...');
-                await rsbot('action', 'interact-npc', shopkeeper.index.toString(), '3', '--wait'); // Trade option
-                await sleep(500);
+        // Sell the dagger
+        console.log('Selling dagger...');
+        const sellResult = await bot.sellToShop(/dagger/i);
+        if (!sellResult.success) {
+            console.log(`Failed to sell dagger: ${sellResult.message}`);
+            return false;
+        }
+        console.log(sellResult.message);
 
-                if (await isShopOpen()) {
-                    console.log('Shop opened!');
-                    // Buy hammer (usually slot 4 or 5 in general store)
-                    for (let slot = 0; slot < 10; slot++) {
-                        await rsbot('action', 'shop-buy', slot.toString(), '1', '--wait');
-                        inventory = await getInventory();
-                        if (inventory.find(i => /hammer/i.test(i.name))) {
-                            console.log('Bought hammer!');
-                            return true;
-                        }
-                    }
-                }
-            }
-            await sleep(500);
+        // Check we got coins
+        await sleep(300);
+        const coins = sdk.findInventoryItem(/coins/i);
+        if (!coins) {
+            console.log('ERROR: No coins after selling dagger');
+            return false;
+        }
+        console.log(`Got ${coins.count} coins`);
+
+        // Buy hammer
+        console.log('Buying hammer...');
+        const buyResult = await bot.buyFromShop(/hammer/i);
+        if (!buyResult.success) {
+            console.log(`Failed to buy hammer: ${buyResult.message}`);
+            return false;
+        }
+        console.log(buyResult.message);
+
+        // Verify hammer in inventory
+        const hammer = sdk.findInventoryItem(/hammer/i);
+        if (!hammer) {
+            console.log('ERROR: Hammer not in inventory after purchase');
+            return false;
         }
 
-        inventory = await getInventory();
-        const hasHammer = inventory.some(i => /hammer/i.test(i.name));
-        console.log(`Final: hasHammer=${hasHammer}`);
-        return hasHammer;
+        console.log(`Success! Have ${hammer.name} in inventory`);
+        await sdk.sendCloseShop();
+        return true;
+
     } finally {
-        if (session) await session.cleanup();
+        if (session) {
+            await session.cleanup();
+        }
     }
 }
 
 runTest()
     .then(ok => {
-        console.log(ok ? '\n✓ PASSED: Bought hammer!' : '\n✗ FAILED');
+        console.log(ok ? '\nPASSED' : '\nFAILED');
         process.exit(ok ? 0 : 1);
     })
-    .catch(e => { console.error('Fatal:', e); process.exit(1); });
+    .catch(e => {
+        console.error('Fatal:', e);
+        process.exit(1);
+    });

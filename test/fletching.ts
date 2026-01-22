@@ -1,135 +1,158 @@
 #!/usr/bin/env bun
-// Fletching Test - gain 1 level in Fletching
+/**
+ * Fletching Test (SDK)
+ * Gain 1 level in Fletching by making arrow shafts.
+ */
 
-import { setupBotWithTutorialSkip, sleep, type BotSession } from './utils/skip_tutorial';
+import { launchBotWithSDK, sleep, type SDKSession } from './utils/browser';
 
 const BOT_NAME = process.env.BOT_NAME;
 const MAX_TURNS = 200;
 
-let rsbot: (...args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
-
-async function getSkillLevel(skill: string): Promise<number> {
-    const result = await rsbot('skills');
-    const match = result.stdout.match(new RegExp(`${skill}:\\s*(\\d+)\\/(\\d+)`, 'i'));
-    return match?.[2] ? parseInt(match[2]) : 1;
-}
-
-async function getInventory(): Promise<any[]> {
-    const result = await rsbot('inventory');
-    const items: any[] = [];
-    for (const line of result.stdout.split('\n')) {
-        const match = line.match(/^\s*\[(\d+)\]\s*(.+?)\s*x(\d+)\s*\(id:\s*(\d+)\)/);
-        if (match?.[1] && match[2] && match[3] && match[4]) {
-            items.push({ slot: parseInt(match[1]), name: match[2].trim(), count: parseInt(match[3]), id: parseInt(match[4]) });
-        }
-    }
-    return items;
-}
-
-async function getLocations(): Promise<any[]> {
-    const result = await rsbot('locations');
-    const locs: any[] = [];
-    for (const line of result.stdout.split('\n')) {
-        const match = line.match(/^\s*(.+?)\s+at\s+\((\d+),\s*(\d+)\)\s*-\s*(\d+)\s*tiles,\s*id:\s*(\d+)/);
-        if (match?.[1] && match[2] && match[3] && match[4] && match[5]) {
-            locs.push({ name: match[1].trim(), x: parseInt(match[2]), z: parseInt(match[3]), distance: parseInt(match[4]), id: parseInt(match[5]) });
-        }
-    }
-    return locs;
-}
-
-async function getGroundItems(): Promise<any[]> {
-    const result = await rsbot('ground');
-    const items: any[] = [];
-    for (const line of result.stdout.split('\n')) {
-        const match = line.match(/^\s*(.+?)\s*x(\d+)\s+at\s+\((\d+),\s*(\d+)\)\s*-\s*(\d+)\s*tiles\s*\(id:\s*(\d+)\)/);
-        if (match?.[1] && match[3] && match[4] && match[6]) {
-            items.push({ name: match[1].trim(), x: parseInt(match[3]), z: parseInt(match[4]), id: parseInt(match[6]) });
-        }
-    }
-    return items;
-}
-
-async function checkDialog(): Promise<{ isOpen: boolean; hasOptions: boolean }> {
-    const result = await rsbot('dialog');
-    return { isOpen: result.stdout.includes('Dialog: OPEN'), hasOptions: result.stdout.includes('Options:') };
-}
-
 async function runTest(): Promise<boolean> {
-    console.log('=== Fletching Test ===');
+    console.log('=== Fletching Test (SDK) ===');
 
-    let session: BotSession | null = null;
+    let session: SDKSession | null = null;
+
     try {
-        session = await setupBotWithTutorialSkip(BOT_NAME);
-        rsbot = session.rsbotCompat;
-        console.log(`Bot ${session.botName} ready!`);
+        session = await launchBotWithSDK(BOT_NAME, { headless: false });
+        const { sdk, bot } = session;
+        console.log(`Bot '${session.botName}' ready!`);
 
-        const initialLevel = await getSkillLevel('Fletching');
+        const initialLevel = sdk.getSkill('Fletching')?.baseLevel ?? 1;
         console.log(`Initial Fletching level: ${initialLevel}`);
 
-        let state: 'find_knife' | 'chop' | 'fletch' = 'find_knife';
-
         for (let turn = 1; turn <= MAX_TURNS; turn++) {
-            // Check for early exit
-            if (turn % 10 === 0) {
-                const level = await getSkillLevel('Fletching');
-                if (level > initialLevel) {
-                    console.log(`Turn ${turn}: SUCCESS - Gained Fletching level: ${initialLevel} -> ${level}`);
-                    return true;
-                }
+            // Check for level up every turn
+            const currentLevel = sdk.getSkill('Fletching')?.baseLevel ?? 1;
+            const currentXp = sdk.getSkill('Fletching')?.experience ?? 0;
+            if (turn % 20 === 0) {
+                console.log(`Turn ${turn}: Fletching level=${currentLevel}, xp=${currentXp}`);
+            }
+            if (currentLevel > initialLevel) {
+                console.log(`Turn ${turn}: SUCCESS - Fletching ${initialLevel} -> ${currentLevel} (xp=${currentXp})`);
+                return true;
             }
 
-            // Handle dialogs
-            const dialog = await checkDialog();
-            if (dialog.isOpen) {
-                if (dialog.hasOptions) {
-                    await rsbot('action', 'dialog', '2', '--wait'); // Select arrow shafts
+            // Handle dialogs (fletching interface or level-up)
+            const state = sdk.getState();
+            if (state?.dialog.isOpen) {
+                console.log(`Turn ${turn}: Dialog open, options:`, state.dialog.options.map(o => `${o.index}:${o.text}`));
+
+                // Fletching dialog: "Ok" buttons make the item, "Arrow Shafts" just labels it
+                // Look for an Ok button in a dialog that also has Arrow Shafts
+                const hasArrowShafts = state.dialog.options.some(o =>
+                    o.text.toLowerCase().includes('arrow shaft')
+                );
+                const okOption = state.dialog.options.find(o =>
+                    o.text.toLowerCase() === 'ok'
+                );
+                if (hasArrowShafts && okOption) {
+                    console.log(`  Fletching dialog - clicking Ok (option ${okOption.index}) to make arrow shafts`);
+                    await sdk.sendClickDialog(okOption.index);
+                } else if (state.dialog.options.length > 0) {
+                    // Click first available option (usually "Click here to continue")
+                    const firstOption = state.dialog.options[0];
+                    console.log(`  Clicking first option ${firstOption.index}: ${firstOption.text}`);
+                    await sdk.sendClickDialog(firstOption.index);
                 } else {
-                    await rsbot('action', 'dialog', '0', '--wait'); // Continue
+                    // No options - click to continue
+                    console.log(`  Clicking to continue (no options)`);
+                    await sdk.sendClickDialog(0);
                 }
+                await sleep(500);
                 continue;
             }
 
-            const inventory = await getInventory();
-            const knife = inventory.find(i => /knife/i.test(i.name));
-            const logs = inventory.find(i => /logs/i.test(i.name));
-
-            if (state === 'find_knife' && !knife) {
-                const ground = await getGroundItems();
-                const groundKnife = ground.find(i => /knife/i.test(i.name));
-                if (groundKnife) {
-                    await rsbot('action', 'pickup', groundKnife.x.toString(), groundKnife.z.toString(), groundKnife.id.toString(), '--wait');
-                    if (turn % 10 === 0) console.log(`Turn ${turn}: Picking up knife`);
+            // Handle interface (fletching make-x)
+            if (state?.interface.isOpen) {
+                console.log(`Turn ${turn}: Interface open (id=${state.interface.interfaceId}), options:`, state.interface.options.map(o => `${o.index}:${o.text}`));
+                if (state.interface.options.length > 0) {
+                    await sdk.sendClickInterface(state.interface.options[0].index);
                 }
-            } else if (!logs || state === 'chop') {
-                state = 'chop';
-                const locs = await getLocations();
-                const tree = locs.find(l => /^tree$/i.test(l.name));
-                if (tree) {
-                    await rsbot('action', 'interact-loc', tree.x.toString(), tree.z.toString(), tree.id.toString(), '1', '--wait');
-                    if (turn % 10 === 0) console.log(`Turn ${turn}: Chopping tree`);
-                }
-                if (logs) state = 'fletch';
-            } else if (knife && logs) {
-                state = 'fletch';
-                await rsbot('action', 'item-on-item', knife.slot.toString(), logs.slot.toString(), '--wait');
-                if (turn % 10 === 0) console.log(`Turn ${turn}: Fletching logs`);
+                await sleep(500);
+                continue;
             }
 
-            await sleep(600);
+            const knife = sdk.findInventoryItem(/knife/i);
+            const logs = sdk.findInventoryItem(/logs/i);
+
+            // Debug logging every 20 turns
+            if (turn % 20 === 1) {
+                console.log(`Turn ${turn}: knife=${knife?.name ?? 'none'}, logs=${logs?.name ?? 'none'}`);
+            }
+
+            // Step 1: Get knife if needed
+            if (!knife) {
+                const groundKnife = sdk.findGroundItem(/knife/i);
+                if (groundKnife) {
+                    // Walk to knife location first if far away
+                    const player = sdk.getState()?.player;
+                    if (player && groundKnife.distance > 3) {
+                        console.log(`Turn ${turn}: Walking to knife at (${groundKnife.x}, ${groundKnife.z}), distance=${groundKnife.distance}`);
+                        await bot.walkTo(groundKnife.x, groundKnife.z, 1);
+                    }
+
+                    console.log(`Turn ${turn}: Picking up knife`);
+                    const result = await bot.pickupItem(groundKnife);
+                    if (!result.success) {
+                        console.log(`  Pickup failed: ${result.message}`);
+                    }
+                    continue;
+                } else {
+                    // Walk to known knife spawn location in Lumbridge
+                    const KNIFE_SPAWN = { x: 3224, z: 3202 };
+                    console.log(`Turn ${turn}: Walking to knife spawn at (${KNIFE_SPAWN.x}, ${KNIFE_SPAWN.z})`);
+                    await bot.walkTo(KNIFE_SPAWN.x, KNIFE_SPAWN.z, 2);
+                    await sleep(1000);  // Wait for item to appear in view
+                    continue;
+                }
+            }
+
+            // Step 2: Get logs if needed
+            if (!logs) {
+                const tree = sdk.findNearbyLoc(/^tree$/i);
+                if (tree) {
+                    console.log(`Turn ${turn}: Chopping tree at (${tree.x}, ${tree.z})`);
+                    await bot.chopTree(tree);
+                    continue;
+                } else {
+                    // Walk to tree area in Lumbridge
+                    const TREE_AREA = { x: 3220, z: 3235 };
+                    console.log(`Turn ${turn}: Walking to tree area`);
+                    await bot.walkTo(TREE_AREA.x, TREE_AREA.z, 3);
+                    continue;
+                }
+            }
+
+            // Step 3: Fletch logs with knife
+            if (knife && logs) {
+                console.log(`Turn ${turn}: Fletching ${logs.name} with ${knife.name}`);
+                await sdk.sendUseItemOnItem(knife.slot, logs.slot);
+                await sleep(600);
+                continue;
+            }
+
+            await sleep(300);
         }
 
-        const finalLevel = await getSkillLevel('Fletching');
+        const finalLevel = sdk.getSkill('Fletching')?.baseLevel ?? 1;
         console.log(`Final Fletching level: ${finalLevel}`);
         return finalLevel > initialLevel;
+
     } finally {
-        if (session) await session.cleanup();
+        if (session) {
+            await session.cleanup();
+        }
     }
 }
 
 runTest()
     .then(ok => {
-        console.log(ok ? '\n✓ PASSED' : '\n✗ FAILED');
+        console.log(ok ? '\nPASSED' : '\nFAILED');
         process.exit(ok ? 0 : 1);
     })
-    .catch(e => { console.error('Fatal:', e); process.exit(1); });
+    .catch(e => {
+        console.error('Fatal:', e);
+        process.exit(1);
+    });

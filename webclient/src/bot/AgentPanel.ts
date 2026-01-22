@@ -113,6 +113,7 @@ export class AgentPanel {
 
     // Action execution
     private pendingAction: BotAction | null = null;
+    private currentActionId: string | null = null;  // For SDK correlation
     private waitTicks: number = 0;
 
     // Sync throttling - only send state every N ticks
@@ -290,6 +291,7 @@ export class AgentPanel {
 
         if (message.type === 'action' && message.action) {
             this.pendingAction = message.action;
+            this.currentActionId = (message as any).actionId || null;  // Store for result correlation
             // Log the action
             this.state.actionLog.push({
                 timestamp: Date.now(),
@@ -354,12 +356,15 @@ export class AgentPanel {
         // Execute pending action
         if (this.pendingAction) {
             const result = this.executeAction(this.pendingAction);
+            const actionId = this.currentActionId;
             this.pendingAction = null;
+            this.currentActionId = null;
 
-            // Send result back to sync service
+            // Send result back to sync service (with actionId for SDK correlation)
             this.sendSync({
                 type: 'actionResult',
-                result
+                result,
+                actionId
             });
 
             // Log the result

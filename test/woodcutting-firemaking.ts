@@ -1,109 +1,188 @@
 #!/usr/bin/env bun
-// Woodcutting & Firemaking Test - gain 1 level in each, then exit immediately
+/**
+ * Woodcutting & Firemaking Test using SDK
+ * Goal: Gain 1 level in Woodcutting and 1 level in Firemaking, then exit.
+ *
+ * Demonstrates:
+ * - SDK plumbing (sendInteractLoc, waitForCondition)
+ * - SDK porcelain (chopTree, burnLogs, pickupItem)
+ * - Type-safe state access (no regex parsing!)
+ */
 
-import { setupBotWithTutorialSkip, sleep, type BotSession } from './utils/skip_tutorial';
+import { BotSDK } from '../agent/sdk';
+import { BotActions } from '../agent/sdk-porcelain';
+import { launchBotBrowser, sleep, type BrowserSession } from './utils/browser';
 
 const BOT_NAME = process.env.BOT_NAME;
 
-let rsbot: (...args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
-
-async function getLevel(skill: string): Promise<number> {
-    const result = await rsbot('skills');
-    const match = result.stdout.match(new RegExp(`${skill}:\\s*(\\d+)\\/(\\d+)`, 'i'));
-    return match?.[2] ? parseInt(match[2]) : 1;
-}
-
-async function getInventory(): Promise<{ slot: number; name: string }[]> {
-    const result = await rsbot('inventory');
-    return [...result.stdout.matchAll(/^\s*\[(\d+)\]\s*(.+?)\s*x\d+/gm)]
-        .filter(m => m[1] && m[2])
-        .map(m => ({ slot: parseInt(m[1]!), name: m[2]!.trim() }));
-}
-
-async function findTree(): Promise<{ x: number; z: number; id: number } | null> {
-    const result = await rsbot('locations');
-    const match = result.stdout.match(/^\s*Tree\s+at\s+\((\d+),\s*(\d+)\).*id:\s*(\d+)/m);
-    return match?.[1] && match[2] && match[3] ? { x: parseInt(match[1]), z: parseInt(match[2]), id: parseInt(match[3]) } : null;
-}
-
-async function getGroundItems(): Promise<{ name: string; x: number; z: number; id: number }[]> {
-    const result = await rsbot('ground');
-    const items: { name: string; x: number; z: number; id: number }[] = [];
-    for (const line of result.stdout.split('\n')) {
-        const match = line.match(/^\s*(.+?)\s*x\d+\s+at\s+\((\d+),\s*(\d+)\).*\(id:\s*(\d+)\)/);
-        if (match?.[1] && match[2] && match[3] && match[4]) {
-            items.push({ name: match[1].trim(), x: parseInt(match[2]), z: parseInt(match[3]), id: parseInt(match[4]) });
-        }
+async function skipTutorial(sdk: BotSDK): Promise<boolean> {
+    // Accept character design if modal is open
+    const state = sdk.getState();
+    if (state?.modalOpen && state.modalInterface === 269) {
+        await sdk.sendAcceptCharacterDesign();
+        await sleep(500);
     }
-    return items;
+
+    // Check if we're in tutorial (x < 3200)
+    const isInTutorial = () => {
+        const s = sdk.getState();
+        return !s?.player || s.player.worldX < 3200;
+    };
+
+    let attempts = 0;
+    while (isInTutorial() && attempts < 30) {
+        await sdk.sendSkipTutorial();
+        await sleep(1000);
+        attempts++;
+    }
+
+    return !isInTutorial();
 }
 
 async function runTest(): Promise<boolean> {
-    console.log('=== Woodcutting & Firemaking Test ===');
+    console.log('=== Woodcutting & Firemaking Test (SDK) ===');
 
-    let session: BotSession | null = null;
+    let browser: BrowserSession | null = null;
+    let sdk: BotSDK | null = null;
+
     try {
-        session = await setupBotWithTutorialSkip(BOT_NAME);
-        rsbot = session.rsbotCompat;
-        console.log(`Bot ${session.botName} ready`);
+        // Launch browser with game client
+        console.log('Launching browser...');
+        browser = await launchBotBrowser(BOT_NAME, { headless: false });
+        console.log(`Bot '${browser.botName}' ready`);
 
-        const initWc = await getLevel('Woodcutting');
-        const initFm = await getLevel('Firemaking');
-        console.log(`Initial: WC=${initWc}, FM=${initFm}`);
+        // Connect SDK to sync server
+        console.log('Connecting SDK...');
+        sdk = new BotSDK({ botUsername: browser.botName });
+        await sdk.connect();
+        console.log('SDK connected');
 
+        // Wait for game to be ready (inGame state)
+        console.log('Waiting for game state...');
+        await sdk.waitForCondition(s => s.inGame, 30000);
+        console.log('In game');
+
+        // Skip tutorial
+        console.log('Skipping tutorial...');
+        const tutorialSkipped = await skipTutorial(sdk);
+        if (!tutorialSkipped) {
+            console.error('Failed to skip tutorial');
+            return false;
+        }
+        console.log('Tutorial skipped');
+
+        // Wait for state to settle after tutorial
+        await sleep(1000);
+
+        // Create porcelain wrapper for high-level actions
+        const bot = new BotActions(sdk);
+
+        // Get initial levels
+        const initWc = sdk.getSkill('Woodcutting')?.baseLevel ?? 1;
+        const initFm = sdk.getSkill('Firemaking')?.baseLevel ?? 1;
+        console.log(`Initial levels: WC=${initWc}, FM=${initFm}`);
+
+        // Main loop
         for (let turn = 1; turn <= 200; turn++) {
-            const wc = await getLevel('Woodcutting');
-            const fm = await getLevel('Firemaking');
+            const wc = sdk.getSkill('Woodcutting')?.baseLevel ?? 1;
+            const fm = sdk.getSkill('Firemaking')?.baseLevel ?? 1;
 
-            // Exit immediately when both leveled
+            // Success condition: gained 1 level in both WC and FM
             if (wc > initWc && fm > initFm) {
-                console.log(`Turn ${turn}: DONE - WC ${initWc}->${wc}, FM ${initFm}->${fm}`);
+                console.log(`Turn ${turn}: SUCCESS - WC ${initWc}->${wc}, FM ${initFm}->${fm}`);
                 return true;
             }
 
-            const inv = await getInventory();
-            const logs = inv.find(i => /logs/i.test(i.name));
-            const tinder = inv.find(i => /tinderbox/i.test(i.name));
-
-            // Priority 1: Get tinderbox if missing
-            if (!tinder) {
-                const ground = await getGroundItems();
-                const groundTinder = ground.find(i => /tinderbox/i.test(i.name));
+            // Get tinderbox if needed
+            if (!sdk.findInventoryItem(/tinderbox/i)) {
+                const groundTinder = sdk.findGroundItem(/tinderbox/i);
                 if (groundTinder) {
-                    await rsbot('action', 'pickup', groundTinder.x.toString(), groundTinder.z.toString(), groundTinder.id.toString(), '--wait');
-                    if (turn % 10 === 0) console.log(`Turn ${turn}: Picking up tinderbox`);
+                    console.log(`Turn ${turn}: Picking up tinderbox`);
+                    const result = await bot.pickupItem(groundTinder);
+                    if (!result.success) {
+                        console.log(`  Failed: ${result.message}`);
+                    }
                     continue;
                 }
             }
 
-            // Burn logs if we have them and need FM
-            if (logs && tinder && fm === initFm) {
-                await rsbot('action', 'item-on-item', tinder.slot.toString(), logs.slot.toString(), '--wait');
-                // Wait for firemaking to complete
-                for (let i = 0; i < 10; i++) {
-                    await sleep(1000);
-                    const newFm = await getLevel('Firemaking');
-                    if (newFm > fm) break;
+            const logs = sdk.findInventoryItem(/logs/i);
+            const tinderbox = sdk.findInventoryItem(/tinderbox/i);
+
+            // Burn logs if we have them and need FM level
+            if (logs && tinderbox && fm === initFm) {
+                console.log(`Turn ${turn}: Burning logs`);
+                const result = await bot.burnLogs(logs);
+                if (!result.success) {
+                    console.log(`  Failed: ${result.message}`);
                 }
-            } else if (wc === initWc || !logs) {
-                // Chop tree if need WC or no logs
-                const tree = await findTree();
-                if (tree) await rsbot('action', 'interact-loc', tree.x.toString(), tree.z.toString(), tree.id.toString(), '1', '--wait');
-                await sleep(300);
-            } else if (logs && tinder) {
-                await rsbot('action', 'item-on-item', tinder.slot.toString(), logs.slot.toString(), '--wait');
-                await sleep(5000);
+                continue;
             }
 
-            if (turn % 20 === 0) console.log(`Turn ${turn}: WC ${initWc}->${wc}, FM ${initFm}->${fm}`);
+            // Chop tree if we need WC level or logs
+            if (wc === initWc || !logs) {
+                const tree = sdk.findNearbyLoc(/^tree$/i);
+                if (tree) {
+                    if (turn % 5 === 0 || !logs) {
+                        console.log(`Turn ${turn}: Chopping tree at (${tree.x}, ${tree.z})`);
+                    }
+                    const result = await bot.chopTree(tree);
+                    if (!result.success) {
+                        console.log(`  Failed: ${result.message}`);
+                    }
+                } else {
+                    // No tree found - wander to find one
+                    const player = sdk.getState()?.player;
+                    if (player) {
+                        const dx = Math.floor(Math.random() * 10) - 5;
+                        const dz = Math.floor(Math.random() * 10) - 5;
+                        const targetX = player.worldX + dx;
+                        const targetZ = player.worldZ + dz;
+                        console.log(`Turn ${turn}: No tree nearby, wandering to (${targetX}, ${targetZ})`);
+                        await sdk.sendWalk(targetX, targetZ);
+                        await sleep(2000);  // Give time to walk
+                    }
+                }
+                continue;
+            }
+
+            // Have logs and tinderbox, burn them
+            if (logs && tinderbox) {
+                console.log(`Turn ${turn}: Burning more logs`);
+                await bot.burnLogs(logs);
+            }
+
+            // Progress logging
+            if (turn % 20 === 0) {
+                console.log(`Turn ${turn}: WC ${initWc}->${wc}, FM ${initFm}->${fm}`);
+            }
         }
 
+        console.log('Reached max turns without completing');
         return false;
+
+    } catch (error) {
+        console.error('Fatal error:', error);
+        return false;
+
     } finally {
-        if (session) await session.cleanup();
+        if (sdk) {
+            console.log('Disconnecting SDK...');
+            await sdk.disconnect();
+        }
+        if (browser) {
+            await browser.cleanup();
+        }
     }
 }
 
+// Run the test
 runTest()
-    .then(ok => { console.log(ok ? '\n✓ PASSED' : '\n✗ FAILED'); process.exit(ok ? 0 : 1); })
-    .catch(e => { console.error('Fatal:', e); process.exit(1); });
+    .then(ok => {
+        console.log(ok ? '\nPASSED' : '\nFAILED');
+        process.exit(ok ? 0 : 1);
+    })
+    .catch(e => {
+        console.error('Fatal:', e);
+        process.exit(1);
+    });

@@ -18,10 +18,10 @@
 
 ## Shared Utilities
 - Use shared utilities from `test/utils/` folder
-- Use `setupBotWithTutorialSkip()` from `utils/skip_tutorial.ts` to handle:
-  - Browser launch
+- Use `launchBotWithSDK()` from `utils/browser.ts` to handle:
+  - Browser launch (with muted audio)
   - Bot login
-  - Sync connection
+  - SDK connection
   - Tutorial skip
   - Cleanup
 - Don't duplicate boilerplate across tests
@@ -29,18 +29,21 @@
 ## No Cheating
 - **NEVER** use Puppeteer's `page.evaluate()` to directly manipulate game state
 - **NEVER** reach into the engine or database to complete tasks
-- All game actions must go through the rsbot CLI / sync service
+- All game actions must go through the SDK
 - Tests should prove the bot can accomplish tasks the same way a real agent would
 
 ## Structure
 ```typescript
-import { setupBotWithTutorialSkip, sleep, BotSession } from './utils/skip_tutorial';
+import { launchBotWithSDK, sleep, type SDKSession } from './utils/browser';
 
 async function runTest(): Promise<boolean> {
-    let session: BotSession | null = null;
+    let session: SDKSession | null = null;
     try {
-        session = await setupBotWithTutorialSkip(process.env.BOT_NAME);
+        session = await launchBotWithSDK(process.env.BOT_NAME);
+        const { sdk, bot } = session;
+
         // ... test logic with early exit on success ...
+
         return success;
     } finally {
         if (session) await session.cleanup();
@@ -48,6 +51,6 @@ async function runTest(): Promise<boolean> {
 }
 
 runTest()
-    .then(ok => { console.log(ok ? '✓ PASSED' : '✗ FAILED'); process.exit(ok ? 0 : 1); })
+    .then(ok => { console.log(ok ? 'PASSED' : 'FAILED'); process.exit(ok ? 0 : 1); })
     .catch(() => process.exit(1));
 ```

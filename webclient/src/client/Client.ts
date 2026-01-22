@@ -298,6 +298,7 @@ export class Client extends GameShell {
     private messageText: (string | null)[] = new TypedArray1d(100, null);
     private messageSender: (string | null)[] = new TypedArray1d(100, null);
     private messageType: Int32Array = new Int32Array(100);
+    private messageTick: Int32Array = new Int32Array(100);  // Track when each message arrived
     private messageTextIds: Int32Array = new Int32Array(100);
     private privateMessageCount: number = 0;
     private splitPrivateChat: number = 0;
@@ -12429,11 +12430,13 @@ export class Client extends GameShell {
             this.messageType[i] = this.messageType[i - 1];
             this.messageSender[i] = this.messageSender[i - 1];
             this.messageText[i] = this.messageText[i - 1];
+            this.messageTick[i] = this.messageTick[i - 1];
         }
 
         this.messageType[0] = type;
         this.messageSender[0] = sender;
         this.messageText[0] = text;
+        this.messageTick[0] = this.loopCycle;
     }
 
     private isFriend(username: string | null): boolean {
