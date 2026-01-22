@@ -1704,11 +1704,38 @@ export class Client extends GameShell {
         const scanComponent = (comId: number, depth: number = 0): void => {
             if (depth > 10) return; // Prevent infinite recursion
             const com = Component.types[comId];
-            if (!com) return;
+            if (!com) {
+                // Debug: try scanning a range of child IDs for this interface
+                if (depth === 0) {
+                    console.log(`[Interface ${this.viewportInterfaceId}] Root component not found, scanning range...`);
+                    for (let i = 0; i < 50; i++) {
+                        const childId = this.viewportInterfaceId * 1000 + i;
+                        const childCom = Component.types[childId];
+                        if (childCom && childCom.buttonType && childCom.buttonType > 0) {
+                            console.log(`  Found ${childId}: buttonType=${childCom.buttonType}, option="${childCom.option}"`);
+                        }
+                    }
+                }
+                return;
+            }
 
-            // Check for BUTTON_SELECT (buttonType 5) - used in crafting menus
-            // Also check for BUTTON_OK (buttonType 1) in viewport interfaces
-            if ((com.buttonType === ButtonType.BUTTON_SELECT || com.buttonType === ButtonType.BUTTON_OK) && com.option) {
+            // Debug: log component info
+            if (depth === 0) {
+                console.log(`[Interface ${this.viewportInterfaceId}] Root has ${com.children?.length || 0} children`);
+            }
+
+            // Debug: log all components with button types
+            if (com.buttonType && com.buttonType > 0) {
+                console.log(`[Interface ${this.viewportInterfaceId}] Component ${comId}: buttonType=${com.buttonType}, option="${com.option}", text="${com.text}"`);
+            }
+
+            // Check for various button types used in interfaces
+            // BUTTON_OK (1), BUTTON_TARGET (2), BUTTON_SELECT (5) - all can be clickable options
+            const isClickable = com.buttonType === ButtonType.BUTTON_OK ||
+                               com.buttonType === ButtonType.BUTTON_TARGET ||
+                               com.buttonType === ButtonType.BUTTON_SELECT;
+
+            if (isClickable && (com.option || com.text)) {
                 options.push({
                     index: options.length + 1,
                     text: com.option || com.text || `Option ${options.length + 1}`,
@@ -1749,6 +1776,112 @@ export class Client extends GameShell {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Click a specific component by its ID (for interfaces without scanned options)
+     */
+    clickComponent(componentId: number): boolean {
+        if (!this.ingame || !this.out) {
+            return false;
+        }
+        this.writePacketOpcode(ClientProt.IF_BUTTON);
+        this.out.p2(componentId);
+        return true;
+    }
+
+    /**
+     * Click on an interface component with iop (inventory operations) like smithing menu
+     * componentId: the component ID (e.g., 1119 for first smithing item)
+     * optionIndex: 1-based index (1=Make, 2=Make 5, 3=Make 10 typically)
+     */
+    clickInterfaceIop(componentId: number, optionIndex: number = 1): boolean {
+        if (!this.ingame || !this.out) {
+            return false;
+        }
+
+        const com = Component.types[componentId];
+        if (!com) {
+            console.log(`[clickInterfaceIop] Component ${componentId} not found`);
+            return false;
+        }
+
+        // Get the item ID from the component's slot if it has one
+        // For smithing, the item displayed is at invSlotObjId[0]
+        let itemId = 0;
+        if (com.invSlotObjId && com.invSlotObjId[0]) {
+            const rawId = com.invSlotObjId[0];
+            const obj = ObjType.get(rawId - 1);
+            itemId = obj.id;
+        }
+
+        // INV_BUTTON opcodes
+        const opcodes = [
+            ClientProt.INV_BUTTON1,
+            ClientProt.INV_BUTTON2,
+            ClientProt.INV_BUTTON3,
+            ClientProt.INV_BUTTON4,
+            ClientProt.INV_BUTTON5
+        ];
+
+        const opcode = opcodes[Math.min(optionIndex - 1, opcodes.length - 1)];
+
+        this.writePacketOpcode(opcode);
+        this.out.p2(itemId);
+        this.out.p2(0); // slot 0 for single-item components
+        this.out.p2(componentId);
+
+        console.log(`[clickInterfaceIop] Sent ${opcode} for component ${componentId}, itemId=${itemId}`);
+        return true;
+    }
+
+    /**
+     * Get debug info about an interface's components
+     */
+    getInterfaceDebugInfo(interfaceId: number): string[] {
+        const lines: string[] = [];
+        const root = Component.types[interfaceId];
+
+        if (!root) {
+            lines.push(`Interface ${interfaceId}: Component not found`);
+            return lines;
+        }
+
+        lines.push(`Interface ${interfaceId}: ${root.children?.length || 0} children`);
+
+        const scan = (comId: number, depth: number): void => {
+            if (depth > 3) return; // Limit depth for readability
+            const com = Component.types[comId];
+            if (!com) return;
+
+            const indent = '  '.repeat(depth);
+
+            // Show components with: buttonType, iop (inventory operations), or option text
+            const hasButton = com.buttonType && com.buttonType > 0;
+            const hasIop = com.iop && com.iop.some((op: string | null) => op);
+            const hasOption = com.option;
+
+            if (hasButton || hasIop || hasOption) {
+                let info = `${indent}${comId}:`;
+                if (hasButton) info += ` buttonType=${com.buttonType}`;
+                if (hasOption) info += ` option="${com.option}"`;
+                if (hasIop) {
+                    const ops = com.iop.filter((op: string | null) => op).join(', ');
+                    info += ` iop=[${ops}]`;
+                }
+                if (com.text) info += ` text="${com.text}"`;
+                lines.push(info);
+            }
+
+            if (com.children) {
+                for (const childId of com.children) {
+                    scan(childId, depth + 1);
+                }
+            }
+        };
+
+        scan(interfaceId, 0);
+        return lines;
     }
 
     /**

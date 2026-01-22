@@ -527,29 +527,28 @@ export class BotStateCollector {
                         seen.add(key);
                         try {
                             const locType = LocType.get(locId);
-                            // Only include interactable locations with options (skip examine-only)
-                            if (locType.op) {
+                            // Include locations that have a name (skip unnamed scenery)
+                            if (locType.name) {
                                 const options: string[] = [];
                                 const optionsWithIndex: LocOption[] = [];
-                                for (let i = 0; i < locType.op.length; i++) {
-                                    const op = locType.op[i];
-                                    // Skip null options and "Examine" (usually last option)
-                                    if (op && op.toLowerCase() !== 'examine') {
-                                        options.push(op);
-                                        optionsWithIndex.push({ text: op, opIndex: i + 1 }); // opIndex is 1-based
+                                if (locType.op) {
+                                    for (let i = 0; i < locType.op.length; i++) {
+                                        const op = locType.op[i];
+                                        if (op) {
+                                            options.push(op);
+                                            optionsWithIndex.push({ text: op, opIndex: i + 1 }); // opIndex is 1-based
+                                        }
                                     }
                                 }
-                                if (options.length > 0) {
-                                    locs.push({
-                                        id: locId,
-                                        name: locType.name || 'Unknown',
-                                        x: baseX + tileX,
-                                        z: baseZ + tileZ,
-                                        distance,
-                                        options,
-                                        optionsWithIndex
-                                    });
-                                }
+                                locs.push({
+                                    id: locId,
+                                    name: locType.name,
+                                    x: baseX + tileX,
+                                    z: baseZ + tileZ,
+                                    distance,
+                                    options,
+                                    optionsWithIndex
+                                });
                             }
                         } catch { /* ignore errors */ }
                     }
@@ -559,33 +558,102 @@ export class BotStateCollector {
                 const wallTypecode = scene.getWallTypecode(currentLevel, tileX, tileZ);
                 if (wallTypecode !== 0) {
                     const wallId = (wallTypecode >> 14) & 0x7fff;
-                    const key = `${wallId}_${tileX}_${tileZ}`;
+                    const key = `wall_${wallId}_${tileX}_${tileZ}`;
                     if (!seen.has(key)) {
                         seen.add(key);
                         try {
                             const locType = LocType.get(wallId);
-                            // Only include interactable walls with options
-                            if (locType.op) {
+                            if (locType.name) {
                                 const options: string[] = [];
                                 const optionsWithIndex: LocOption[] = [];
-                                for (let i = 0; i < locType.op.length; i++) {
-                                    const op = locType.op[i];
-                                    if (op && op.toLowerCase() !== 'examine') {
-                                        options.push(op);
-                                        optionsWithIndex.push({ text: op, opIndex: i + 1 }); // opIndex is 1-based
+                                if (locType.op) {
+                                    for (let i = 0; i < locType.op.length; i++) {
+                                        const op = locType.op[i];
+                                        if (op) {
+                                            options.push(op);
+                                            optionsWithIndex.push({ text: op, opIndex: i + 1 });
+                                        }
                                     }
                                 }
-                                if (options.length > 0) {
-                                    locs.push({
-                                        id: wallId,
-                                        name: locType.name || 'Unknown',
-                                        x: baseX + tileX,
-                                        z: baseZ + tileZ,
-                                        distance,
-                                        options,
-                                        optionsWithIndex
-                                    });
+                                locs.push({
+                                    id: wallId,
+                                    name: locType.name,
+                                    x: baseX + tileX,
+                                    z: baseZ + tileZ,
+                                    distance,
+                                    options,
+                                    optionsWithIndex
+                                });
+                            }
+                        } catch { /* ignore errors */ }
+                    }
+                }
+
+                // Check for wall decorations (furnaces, ranges, etc.)
+                const decorTypecode = scene.getDecorTypecode(currentLevel, tileZ, tileX);
+                if (decorTypecode !== 0) {
+                    const decorId = (decorTypecode >> 14) & 0x7fff;
+                    const key = `decor_${decorId}_${tileX}_${tileZ}`;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        try {
+                            const locType = LocType.get(decorId);
+                            if (locType.name) {
+                                const options: string[] = [];
+                                const optionsWithIndex: LocOption[] = [];
+                                if (locType.op) {
+                                    for (let i = 0; i < locType.op.length; i++) {
+                                        const op = locType.op[i];
+                                        if (op) {
+                                            options.push(op);
+                                            optionsWithIndex.push({ text: op, opIndex: i + 1 });
+                                        }
+                                    }
                                 }
+                                locs.push({
+                                    id: decorId,
+                                    name: locType.name,
+                                    x: baseX + tileX,
+                                    z: baseZ + tileZ,
+                                    distance,
+                                    options,
+                                    optionsWithIndex
+                                });
+                            }
+                        } catch { /* ignore errors */ }
+                    }
+                }
+
+                // Check for ground decorations
+                const groundDecorTypecode = scene.getGroundDecorTypecode(currentLevel, tileX, tileZ);
+                if (groundDecorTypecode !== 0) {
+                    const groundDecorId = (groundDecorTypecode >> 14) & 0x7fff;
+                    const key = `gdecor_${groundDecorId}_${tileX}_${tileZ}`;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        try {
+                            const locType = LocType.get(groundDecorId);
+                            if (locType.name) {
+                                const options: string[] = [];
+                                const optionsWithIndex: LocOption[] = [];
+                                if (locType.op) {
+                                    for (let i = 0; i < locType.op.length; i++) {
+                                        const op = locType.op[i];
+                                        if (op) {
+                                            options.push(op);
+                                            optionsWithIndex.push({ text: op, opIndex: i + 1 });
+                                        }
+                                    }
+                                }
+                                locs.push({
+                                    id: groundDecorId,
+                                    name: locType.name,
+                                    x: baseX + tileX,
+                                    z: baseZ + tileZ,
+                                    distance,
+                                    options,
+                                    optionsWithIndex
+                                });
                             }
                         } catch { /* ignore errors */ }
                     }
@@ -958,6 +1026,7 @@ export interface BotWorldState extends BotState {
         isOpen: boolean;
         interfaceId: number;
         options: Array<{ index: number; text: string }>;
+        debugInfo: string[];
     };
     modalOpen: boolean;
     modalInterface: number;

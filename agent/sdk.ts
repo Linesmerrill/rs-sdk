@@ -341,6 +341,15 @@ export class BotSDK {
         });
     }
 
+    async sendClickInterfaceComponent(componentId: number, optionIndex: number = 1): Promise<ActionResult> {
+        return this.sendAction({
+            type: 'clickInterfaceComponent',
+            componentId,
+            optionIndex,
+            reason: 'SDK'
+        });
+    }
+
     async sendAcceptCharacterDesign(): Promise<ActionResult> {
         return this.sendAction({
             type: 'acceptCharacterDesign',

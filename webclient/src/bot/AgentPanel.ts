@@ -49,6 +49,7 @@ type BotAction =
     | { type: 'interactNpc'; npcIndex: number; optionIndex: number; reason: string }
     | { type: 'clickDialogOption'; optionIndex: number; reason: string }
     | { type: 'clickInterfaceOption'; optionIndex: number; reason: string }
+    | { type: 'clickInterfaceComponent'; componentId: number; optionIndex?: number; reason: string }
     | { type: 'acceptCharacterDesign'; reason: string }
     | { type: 'skipTutorial'; reason: string }
     | { type: 'walkTo'; x: number; z: number; running?: boolean; reason: string }
@@ -427,7 +428,10 @@ export class AgentPanel {
             interface: {
                 isOpen: this.client.isViewportInterfaceOpen(),
                 interfaceId: this.client.getViewportInterface(),
-                options: interfaceOptions
+                options: interfaceOptions,
+                debugInfo: this.client.isViewportInterfaceOpen()
+                    ? this.client.getInterfaceDebugInfo(this.client.getViewportInterface())
+                    : []
             },
             modalOpen: this.client.isModalOpen(),
             modalInterface: this.client.getModalInterface()
@@ -489,6 +493,12 @@ export class AgentPanel {
                         return { success: true, message: `Clicked interface option ${action.optionIndex}` };
                     }
                     return { success: false, message: 'Failed to click interface option (no viewport interface open or invalid option)' };
+
+                case 'clickInterfaceComponent':
+                    if (this.client.clickInterfaceIop(action.componentId, action.optionIndex ?? 1)) {
+                        return { success: true, message: `Clicked interface component ${action.componentId} option ${action.optionIndex ?? 1}` };
+                    }
+                    return { success: false, message: 'Failed to click interface component' };
 
                 case 'acceptCharacterDesign':
                     if (this.client.acceptCharacterDesign()) {

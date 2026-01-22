@@ -160,6 +160,7 @@ export type BotAction =
     | { type: 'interactNpc'; npcIndex: number; optionIndex: number; reason: string }
     | { type: 'clickDialogOption'; optionIndex: number; reason: string }
     | { type: 'clickInterfaceOption'; optionIndex: number; reason: string }
+    | { type: 'clickInterfaceComponent'; componentId: number; optionIndex?: number; reason: string }
     | { type: 'acceptCharacterDesign'; reason: string }
     | { type: 'skipTutorial'; reason: string }
     | { type: 'walkTo'; x: number; z: number; running?: boolean; reason: string }

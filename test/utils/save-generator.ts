@@ -110,6 +110,7 @@ export interface SaveConfig {
     inventory?: Array<{ id: number; count: number }>;
     equipment?: Array<{ id: number; count: number; slot: number }>;
     coins?: number;
+    varps?: Record<number, number>;  // Varp ID -> value (281=tutorial progress)
     appearance?: {
         body?: number[];
         colors?: number[];
@@ -248,11 +249,25 @@ export function createSaveData(config: SaveConfig): Uint8Array {
         writer.p1(level); // Current level
     }
 
-    // Variables (varps) - write count of 309 (typical), all zeros
+    // Variables (varps) - write count of 309 (typical)
+    // Set tutorial progress (varp 281) to 1000 to mark tutorial complete
     const varpCount = 309;
+    const varps = new Array(varpCount).fill(0);
+    varps[281] = 1000;  // Tutorial complete
+
+    // Apply custom varps if specified
+    if (config.varps) {
+        for (const [id, value] of Object.entries(config.varps)) {
+            const idx = parseInt(id);
+            if (idx >= 0 && idx < varpCount) {
+                varps[idx] = value;
+            }
+        }
+    }
+
     writer.p2(varpCount);
     for (let i = 0; i < varpCount; i++) {
-        writer.p4(0);
+        writer.p4(varps[i]);
     }
 
     // Inventories
