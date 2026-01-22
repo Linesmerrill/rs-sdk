@@ -218,6 +218,52 @@ await this.sdk.waitForCondition(state => {
 | `waitForDialogClose()` | Waits for dialog to close |
 | `navigateDialog(choices)` | Clicks through dialog options |
 
+### 6. Interface Components: buttonType vs iop
+
+**Problem**: Some interfaces (like the smithing anvil menu) have clickable components that don't use `buttonType`. Instead, they use `iop` (inventory operations) like `[Make, Make 5, Make 10]`. The standard `sendClickInterface()` doesn't work on these.
+
+**Solution**: Added `sendClickInterfaceComponent(componentId, optionIndex)` that uses `INV_BUTTON1-5` opcodes:
+
+```typescript
+// Smithing interface (id 994) has components with iop, not buttonType:
+// 1119: iop=[Make, Make 5, Make 10]  <- dagger
+// 1120: iop=[Make, Make 5, Make 10]  <- sword
+// 1121: iop=[Make, Make 5, Make 10]  <- scimitar
+
+// Click component 1119 with option 1 (Make)
+await sdk.sendClickInterfaceComponent(1119, 1);
+```
+
+**How to identify which to use**:
+- If `interface.options` array has entries → use `sendClickInterface(optionIndex)`
+- If `interface.options` is empty but `debugInfo` shows `iop=[...]` → use `sendClickInterfaceComponent(componentId, optionIndex)`
+
+**Debug output** from BotSDK shows both:
+```
+Interface 994: 137 children
+  1084: buttonType=3 text="Close Window"  <- use sendClickInterface
+  1119: iop=[Make, Make 5, Make 10]       <- use sendClickInterfaceComponent
+```
+
+### 7. Varps (Variable Player) Control Game State
+
+**Problem**: Bots spawned with save generator were being treated as tutorial players (X < 3200 triggered tutorial checks).
+
+**Solution**: Set varp 281 = 1000 in save file to mark tutorial as complete:
+
+```typescript
+// In save-generator.ts
+const varps = new Array(varpCount).fill(0);
+varps[281] = 1000;  // Tutorial complete
+```
+
+**Common varps**:
+| Varp | Purpose |
+|------|---------|
+| 281 | Tutorial progress (1000 = complete) |
+| 83 | Attack style selected |
+| 43 | Auto-retaliate toggle |
+
 ## Files
 
 | File | Purpose |
@@ -227,3 +273,5 @@ await this.sdk.waitForCondition(state => {
 | `agent/sdk-porcelain.ts` | Porcelain layer - high-level domain-aware actions |
 | `agent/sync.ts` | WebSocket message router (no file I/O) |
 | `webclient/src/bot/AgentPanel.ts` | Client-side action handling |
+| `webclient/src/client/Client.ts` | Low-level client methods (clickInterfaceIop, etc.) |
+| `test/utils/save-generator.ts` | Generate pre-configured save files for tests |
