@@ -87,7 +87,7 @@ async function takeVictoryScreenshot(ctx: ScriptContext): Promise<boolean> {
         const page = session.page;
 
         // Take screenshot and save to file
-        const screenshotPath = '/Users/max/workplace/rs-agent/Server/bot_arcs/brad_1/victory.png';
+        const screenshotPath = '/Users/max/workplace/rs-agent/Server/bot_arcs/adam_5/victory.png';
         await page.screenshot({ path: screenshotPath, type: 'png' });
         ctx.log(`Victory screenshot saved to: ${screenshotPath}`);
 
@@ -101,7 +101,7 @@ async function takeVictoryScreenshot(ctx: ScriptContext): Promise<boolean> {
 }
 
 runArc({
-    characterName: 'brad_1',
+    characterName: 'adam_5',
     arcName: 'final-mission',
     goal: 'Take victory screenshot',
     timeLimit: 5 * 60 * 1000,  // 5 minutes max
@@ -191,7 +191,7 @@ runArc({
     ctx.log('');
 
     if (screenshotSuccess) {
-        ctx.log('Victory screenshot saved to: /Users/max/workplace/rs-agent/Server/bot_arcs/brad_1/victory.png');
+        ctx.log('Victory screenshot saved to: /Users/max/workplace/rs-agent/Server/bot_arcs/adam_5/victory.png');
     } else {
         ctx.log('Screenshot failed - check run logs for screenshots');
     }

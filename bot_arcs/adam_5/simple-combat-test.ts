@@ -6,7 +6,7 @@
 import { runArc } from '../arc-runner.ts';
 
 runArc({
-    characterName: 'brad_1',
+    characterName: 'adam_5',
     arcName: 'simple-combat-test',
     goal: 'Attack one cow to test stability',
     timeLimit: 60_000,  // 1 minute

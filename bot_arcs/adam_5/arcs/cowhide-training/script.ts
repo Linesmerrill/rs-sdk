@@ -580,7 +580,7 @@ async function trainingLoop(ctx: ScriptContext, stats: Stats): Promise<void> {
 
 // === RUN THE ARC ===
 runArc({
-    characterName: 'brad_1',
+    characterName: 'adam_5',
     arcName: 'cowhide-training',
     goal: 'Train combat, collect hides, bank at Varrock West',
     timeLimit: 10 * 60 * 1000,  // 10 minutes

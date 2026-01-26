@@ -1168,7 +1168,7 @@ Despite having 18 cowhides in the bank, the general store paid almost nothing fo
 - Pathfinding occasionally gets stuck
 
 ### Victory Screenshot
-Saved to: `/Users/max/workplace/rs-agent/Server/bot_arcs/brad_1/victory.png`
+Saved to: `/Users/max/workplace/rs-agent/Server/bot_arcs/adam_5/victory.png`
 
 Shows Brad_1 at the cow field near Lumbridge with:
 - Bronze sword equipped

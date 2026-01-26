@@ -218,7 +218,7 @@ async function combatLoop(ctx: ScriptContext, stats: Stats): Promise<void> {
 }
 
 runArc({
-    characterName: 'brad_1',
+    characterName: 'adam_5',
     arcName: 'drop-and-train',
     goal: 'Drop items, train combat at cows',
     timeLimit: 5 * 60 * 1000,  // 5 minutes

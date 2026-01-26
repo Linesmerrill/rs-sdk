@@ -35,7 +35,7 @@ function getPosition(ctx: ScriptContext): { x: number, z: number } {
 }
 
 runArc({
-    characterName: 'brad_1',
+    characterName: 'adam_5',
     arcName: 'quick-bank',
     goal: 'Bank hides at Varrock West Bank',
     timeLimit: 10 * 60 * 1000,  // 10 minutes

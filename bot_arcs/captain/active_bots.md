@@ -4,7 +4,7 @@
 |-----|-----------|------|---------------|
 | Adam_2 | `bot_arcs/Adam_2` | Combat 70+ → Gold → Gear | 344 |
 | Adam_4 | `bot_arcs/Adam_4` | Combat 70+ → Gold → Gear | 276 |
-| brad_1 | `bot_arcs/brad_1` | Combat 70+ → Gold → Gear | 281 |
+| adam_5 | `bot_arcs/adam_5` | Combat 70+ → Gold → Gear | 281 |
 
 ## Respawn Command Template
 

@@ -444,7 +444,7 @@ async function buyGearFromShop(ctx: ScriptContext, gpAvailable: number): Promise
 
 // Main arc
 runArc({
-    characterName: 'brad_1',
+    characterName: 'adam_5',
     arcName: 'sell-and-upgrade',
     goal: 'Sell hides, buy gear upgrades',
     timeLimit: 10 * 60 * 1000,

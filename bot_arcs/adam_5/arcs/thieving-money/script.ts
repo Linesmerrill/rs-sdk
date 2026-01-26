@@ -1,6 +1,6 @@
 /**
  * Arc: thieving-money
- * Character: brad_1
+ * Character: adam_5
  *
  * Goal: Make money by pickpocketing men in Lumbridge
  * Strategy:
@@ -436,7 +436,7 @@ async function waitForState(ctx: ScriptContext): Promise<boolean> {
 
 // === RUN THE ARC ===
 runArc({
-    characterName: 'brad_1',
+    characterName: 'adam_5',
     arcName: 'thieving-money',
     goal: 'Make money by pickpocketing men, bank at 200+ GP',
     timeLimit: 10 * 60 * 1000,

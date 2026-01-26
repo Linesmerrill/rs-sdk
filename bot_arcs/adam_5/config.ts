@@ -1,5 +1,5 @@
 /**
- * brad_1 - Bot Arc Character Configuration
+ * adam_5 - Bot Arc Character Configuration
  *
  * A combat-focused character aiming for 70+ attack/strength/defence.
  * Strategy: Kill cows/NPCs, cook meat for healing, sell drops, buy gear upgrades in Varrock.
@@ -8,10 +8,10 @@
 
 export const character = {
   // The username used for save files (lowercase)
-  username: 'brad_1',
+  username: 'adam_5',
 
   // Display name
-  displayName: 'brad_1',
+  displayName: 'adam_5',
 
   // Current focus arc
   currentArc: 'combat-grind',

@@ -766,7 +766,7 @@ function logFinalStats(ctx: ScriptContext, stats: Stats): void {
 // ==================== MAIN ====================
 
 runArc({
-    characterName: 'brad_1',
+    characterName: 'adam_5',
     arcName: 'combat-progression',
     goal: 'Stable combat training at cow field (drop items, no banking)',
     timeLimit: 5 * 60 * 1000,  // 5 minutes (short for testing stability)

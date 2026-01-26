@@ -262,7 +262,7 @@ function logFinalStats(ctx: ScriptContext, stats: Stats): void {
 
 // === RUN THE ARC ===
 runArc({
-    characterName: 'brad_1',
+    characterName: 'adam_5',
     arcName: 'mining-money',
     goal: 'Make money by mining and selling ore',
     timeLimit: 10 * 60 * 1000,

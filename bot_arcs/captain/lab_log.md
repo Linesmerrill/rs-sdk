@@ -12,12 +12,12 @@ Monitored 3 bots for 4 hours with 30-minute check intervals. Respawned all bots 
 |-----|-------|-----|-------|
 | Adam_2 | 328 | 344 | +16 |
 | Adam_4 | 268 | 276 | +8 |
-| brad_1 | 274 | 281 | +7 |
+| adam_5 | 274 | 281 | +7 |
 
 **Total: +31 levels across all bots**
 
 ### Milestones
-- brad_1 hit Strength 70 (first to reach target)
+- adam_5 hit Strength 70 (first to reach target)
 - Adam_4 balanced all combat stats at 60
 - Adam_2 collected 23 hides ready to bank
 
@@ -58,7 +58,7 @@ Monitored 3 bots for 4 hours with 30-minute check intervals. Respawned all bots 
 |-----|--------|-------|--------------|
 | Adam_2 | Running | 346 | ~62 hides collected, near Draynor Bank, still Bronze gear |
 | Adam_4 | Running | **301** | **HIT SCORE 300!** Varrock West Bank working, 10+ bank trips |
-| brad_1 | Respawned | 311 | Atk 72, Str 77, Def 71 - stuck with full inventory, respawned with gate fix |
+| adam_5 | Respawned | 311 | Atk 72, Str 77, Def 71 - stuck with full inventory, respawned with gate fix |
 
 ### Wins
 - **Adam_4 hit Score 300!** Varrock West Bank path confirmed working
@@ -83,7 +83,7 @@ Attempted to sell hides and buy gear for all 3 bots. Results:
 |-----|------------|------------|-----------|----------------|
 | Adam_2 | ✅ | ~74 | 348 | ❌ Bank empty |
 | Adam_4 | ✅ | 76 | 282 | ❌ Pathfinding stuck |
-| brad_1 | ✅ | ~79 | 312 | ❌ GS paid 0gp |
+| adam_5 | ✅ | ~79 | 312 | ❌ GS paid 0gp |
 
 **Victory screenshots saved** to each bot's folder.
 
@@ -112,6 +112,6 @@ Build robust pathfinding solution - this unlocks the full goal loop:
 |-----|-------|--------------|-----------|
 | Adam_2 | 348 | Atk 68, Str 67, Def 68, HP 67 | Bronze |
 | Adam_4 | 301 | Atk 67, Str 66, Def 66, HP 66 | Bronze |
-| brad_1 | 312 | Atk 73, Str 77, Def 71, HP 74 | Bronze |
+| adam_5 | 312 | Atk 73, Str 77, Def 71, HP 74 | Bronze |
 
 All bots stopped. Good night! 🌙

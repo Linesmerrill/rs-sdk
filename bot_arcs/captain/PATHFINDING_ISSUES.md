@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-The bot arcs experience systematic pathfinding and navigation failures that prevent successful completion of banking/selling/upgrade operations. Analysis of 67+ failed runs across Adam_2, Adam_4, and brad_1 reveals three primary failure modes:
+The bot arcs experience systematic pathfinding and navigation failures that prevent successful completion of banking/selling/upgrade operations. Analysis of 67+ failed runs across Adam_2, Adam_4, and adam_5 reveals three primary failure modes:
 
 1. **"No path found" errors** - Pathfinding algorithm cannot locate viable routes
 2. **walkTo timeouts** - Navigation actions exceed 30-second timeout limits
@@ -91,7 +91,7 @@ Bots consistently get stuck at these coordinates:
 | Adam_2 sell-and-upgrade | 62 | 4 | 93% |
 | Adam_2 cowhide-banking | 6 | 0 | 100% |
 | Adam_4 combat-progression | Multiple | - | High |
-| brad_1 quick-bank | Path errors | 1 | Partial |
+| adam_5 quick-bank | Path errors | 1 | Partial |
 
 ---
 

@@ -1,6 +1,6 @@
 /**
  * Arc: combat-grind
- * Character: brad_1
+ * Character: adam_5
  *
  * Goal: Train Attack, Strength, Defence with balanced style cycling.
  * Strategy: Kill cows, loot raw beef + hides.
@@ -332,7 +332,7 @@ async function waitForState(ctx: ScriptContext, stats: Stats): Promise<boolean> 
 
 // === RUN THE ARC ===
 runArc({
-    characterName: 'brad_1',
+    characterName: 'adam_5',
     arcName: 'combat-grind',
     goal: 'Train Attack/Strength/Defence at cows',
     timeLimit: 10 * 60 * 1000,

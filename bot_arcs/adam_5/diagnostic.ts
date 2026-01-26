@@ -6,7 +6,7 @@ import { runArc } from '../arc-runner.ts';
 import type { ScriptContext } from '../arc-runner.ts';
 
 runArc({
-    characterName: 'brad_1',
+    characterName: 'adam_5',
     arcName: 'diagnostic',
     goal: 'Check current state and position',
     timeLimit: 60_000,  // 1 minute
