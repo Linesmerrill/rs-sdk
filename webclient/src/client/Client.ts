@@ -1279,6 +1279,35 @@ export class Client extends GameShell {
     }
 
     /**
+     * Close any modal interface (bank, shop, etc.)
+     * Unlike closeShop(), this works for any open modal interface.
+     */
+    closeModal(): boolean {
+        if (!this.ingame || !this.out) {
+            return false;
+        }
+
+        // Check if any modal is open
+        if (this.viewportInterfaceId === -1 && this.sidebarInterfaceId === -1) {
+            return true; // Already closed
+        }
+
+        // Send CLOSE_MODAL to server
+        this.out.p1isaac(ClientProt.CLOSE_MODAL);
+
+        // Locally reset the interface state
+        if (this.sidebarInterfaceId !== -1) {
+            this.sidebarInterfaceId = -1;
+            this.redrawSidebar = true;
+            this.redrawSideicons = true;
+        }
+        this.viewportInterfaceId = -1;
+        this.pressedContinueOption = false;
+
+        return true;
+    }
+
+    /**
      * Check if bank interface is open
      */
     isBankOpen(): boolean {

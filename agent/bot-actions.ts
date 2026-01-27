@@ -94,6 +94,26 @@ export interface FletchResult {
     product?: InventoryItem;
 }
 
+export interface OpenBankResult {
+    success: boolean;
+    message: string;
+    reason?: 'no_bank_found' | 'no_bank_option' | 'timeout' | 'dialog_stuck';
+}
+
+export interface BankDepositResult {
+    success: boolean;
+    message: string;
+    amountDeposited?: number;
+    reason?: 'bank_not_open' | 'item_not_found' | 'timeout';
+}
+
+export interface BankWithdrawResult {
+    success: boolean;
+    message: string;
+    item?: InventoryItem;
+    reason?: 'bank_not_open' | 'timeout';
+}
+
 export class BotActions {
     constructor(private sdk: BotSDK) {}
 
@@ -1161,6 +1181,262 @@ export class BotActions {
             message: `Sold ${sellItem.name} x${totalSold}`,
             amountSold: totalSold
         };
+    }
+
+    // ============ Porcelain: Bank Actions ============
+
+    /**
+     * Opens a bank by interacting with a nearby banker NPC or bank booth.
+     * Waits for the bank interface to open.
+     *
+     * @param timeout - Maximum time to wait for bank to open (default: 10000ms)
+     *
+     * Tries in order:
+     * 1. Banker NPC with "Bank" option
+     * 2. Bank booth with "Bank" option
+     * 3. Bank booth with "Use" option
+     *
+     * Handles dialogs that may appear (e.g., first-time bank messages).
+     */
+    async openBank(timeout: number = 10000): Promise<OpenBankResult> {
+        // Check if bank is already open
+        const state = this.sdk.getState();
+        if (state?.interface?.isOpen) {
+            return { success: true, message: 'Bank already open' };
+        }
+
+        // Dismiss any blocking dialogs first
+        await this.dismissBlockingUI();
+
+        // Try to find a banker NPC first (more reliable)
+        const banker = this.sdk.findNearbyNpc(/banker/i);
+        const bankBooth = this.sdk.findNearbyLoc(/bank booth|bank chest/i);
+
+        let interactSuccess = false;
+
+        if (banker) {
+            const bankOpt = banker.optionsWithIndex.find(o => /^bank$/i.test(o.text));
+            if (bankOpt) {
+                await this.sdk.sendInteractNpc(banker.index, bankOpt.opIndex);
+                interactSuccess = true;
+            }
+        }
+
+        if (!interactSuccess && bankBooth) {
+            const bankOpt = bankBooth.optionsWithIndex.find(o => /^bank$/i.test(o.text)) ||
+                           bankBooth.optionsWithIndex.find(o => /use/i.test(o.text));
+            if (bankOpt) {
+                await this.sdk.sendInteractLoc(bankBooth.x, bankBooth.z, bankBooth.id, bankOpt.opIndex);
+                interactSuccess = true;
+            }
+        }
+
+        if (!interactSuccess) {
+            return {
+                success: false,
+                message: 'No banker NPC or bank booth found nearby',
+                reason: 'no_bank_found'
+            };
+        }
+
+        // Wait for bank interface to open, handling any dialogs
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < timeout) {
+            try {
+                await this.sdk.waitForCondition(s =>
+                    s.interface?.isOpen === true || s.dialog?.isOpen === true,
+                    Math.min(2000, timeout - (Date.now() - startTime))
+                );
+
+                const currentState = this.sdk.getState();
+
+                // If interface is open, we're done
+                if (currentState?.interface?.isOpen) {
+                    return {
+                        success: true,
+                        message: `Bank opened (interfaceId: ${currentState.interface.interfaceId})`
+                    };
+                }
+
+                // If dialog is open, click through it
+                if (currentState?.dialog?.isOpen) {
+                    const opt = currentState.dialog.options?.[0];
+                    await this.sdk.sendClickDialog(opt?.index ?? 0);
+                    await new Promise(r => setTimeout(r, 300));
+                    continue;
+                }
+            } catch {
+                // Timeout on waitForCondition, loop will continue or exit
+            }
+        }
+
+        // Final check
+        const finalState = this.sdk.getState();
+        if (finalState?.interface?.isOpen) {
+            return {
+                success: true,
+                message: `Bank opened (interfaceId: ${finalState.interface.interfaceId})`
+            };
+        }
+
+        return {
+            success: false,
+            message: 'Timeout waiting for bank interface to open',
+            reason: 'timeout'
+        };
+    }
+
+    /**
+     * Closes the bank interface.
+     *
+     * @param timeout - Maximum time to wait for bank to close (default: 5000ms)
+     */
+    async closeBank(timeout: number = 5000): Promise<ActionResult> {
+        const state = this.sdk.getState();
+        if (!state?.interface?.isOpen) {
+            return { success: true, message: 'Bank already closed' };
+        }
+
+        // Send close modal command (works for bank, shop, etc.)
+        await this.sdk.sendCloseModal();
+
+        try {
+            // Wait for interface to close
+            await this.sdk.waitForCondition(s => !s.interface?.isOpen, timeout);
+            return { success: true, message: 'Bank closed' };
+        } catch {
+            // Try a second close attempt
+            await this.sdk.sendCloseModal();
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            const finalState = this.sdk.getState();
+            if (!finalState?.interface?.isOpen) {
+                return { success: true, message: 'Bank closed (second attempt)' };
+            }
+
+            return {
+                success: false,
+                message: `Bank close timeout - interface.isOpen=${finalState?.interface?.isOpen}`
+            };
+        }
+    }
+
+    /**
+     * Deposits an item from inventory into the bank.
+     * Bank must already be open.
+     *
+     * @param target - Item to deposit (InventoryItem, name string, or RegExp pattern)
+     * @param amount - Amount to deposit: number or -1 for all (default: -1)
+     *
+     * Note: Use amount=-1 to deposit all of a stackable item type.
+     */
+    async depositItem(
+        target: InventoryItem | string | RegExp,
+        amount: number = -1
+    ): Promise<BankDepositResult> {
+        const state = this.sdk.getState();
+        if (!state?.interface?.isOpen) {
+            return {
+                success: false,
+                message: 'Bank is not open',
+                reason: 'bank_not_open'
+            };
+        }
+
+        const item = this.resolveInventoryItem(target, /./);
+        if (!item) {
+            return {
+                success: false,
+                message: `Item not found in inventory: ${target}`,
+                reason: 'item_not_found'
+            };
+        }
+
+        const countBefore = state.inventory.filter(i => i.id === item.id)
+            .reduce((sum, i) => sum + i.count, 0);
+
+        await this.sdk.sendBankDeposit(item.slot, amount);
+
+        try {
+            // Wait for item count to decrease
+            await this.sdk.waitForCondition(s => {
+                const countNow = s.inventory.filter(i => i.id === item.id)
+                    .reduce((sum, i) => sum + i.count, 0);
+                return countNow < countBefore;
+            }, 5000);
+
+            const finalState = this.sdk.getState();
+            const countAfter = finalState?.inventory.filter(i => i.id === item.id)
+                .reduce((sum, i) => sum + i.count, 0) ?? 0;
+            const amountDeposited = countBefore - countAfter;
+
+            return {
+                success: true,
+                message: `Deposited ${item.name} x${amountDeposited}`,
+                amountDeposited
+            };
+        } catch {
+            return {
+                success: false,
+                message: `Timeout waiting for ${item.name} to be deposited`,
+                reason: 'timeout'
+            };
+        }
+    }
+
+    /**
+     * Withdraws an item from the bank into inventory.
+     * Bank must already be open.
+     *
+     * @param bankSlot - The slot in the bank (0-indexed) to withdraw from
+     * @param amount - Amount to withdraw: number or -1 for all (default: 1)
+     *
+     * Note: Bank slot is the position in the bank, not inventory slot.
+     */
+    async withdrawItem(bankSlot: number, amount: number = 1): Promise<BankWithdrawResult> {
+        const state = this.sdk.getState();
+        if (!state?.interface?.isOpen) {
+            return {
+                success: false,
+                message: 'Bank is not open',
+                reason: 'bank_not_open'
+            };
+        }
+
+        const invCountBefore = state.inventory.length;
+
+        await this.sdk.sendBankWithdraw(bankSlot, amount);
+
+        try {
+            // Wait for inventory to change (item added or count increased)
+            await this.sdk.waitForCondition(s => {
+                return s.inventory.length > invCountBefore ||
+                       s.inventory.some(i => {
+                           const before = state.inventory.find(bi => bi.slot === i.slot);
+                           return before && i.count > before.count;
+                       });
+            }, 5000);
+
+            // Find the new/changed item
+            const finalInv = this.sdk.getInventory();
+            const newItem = finalInv.find(i => {
+                const before = state.inventory.find(bi => bi.slot === i.slot);
+                return !before || i.count > before.count;
+            });
+
+            return {
+                success: true,
+                message: `Withdrew item from bank slot ${bankSlot}`,
+                item: newItem
+            };
+        } catch {
+            return {
+                success: false,
+                message: `Timeout waiting for item to be withdrawn`,
+                reason: 'timeout'
+            };
+        }
     }
 
     // ============ Porcelain: Crafting Actions ============

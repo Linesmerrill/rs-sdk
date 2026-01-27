@@ -574,6 +574,13 @@ export class BotSDK {
         });
     }
 
+    async sendCloseModal(): Promise<ActionResult> {
+        return this.sendAction({
+            type: 'closeModal',
+            reason: 'SDK'
+        });
+    }
+
     async sendSetCombatStyle(style: number): Promise<ActionResult> {
         return this.sendAction({
             type: 'setCombatStyle',

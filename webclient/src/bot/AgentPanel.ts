@@ -72,6 +72,7 @@ type BotAction =
     | { type: 'shopBuy'; slot: number; amount: number; reason: string }
     | { type: 'shopSell'; slot: number; amount: number; reason: string }
     | { type: 'closeShop'; reason: string }
+    | { type: 'closeModal'; reason: string }
     | { type: 'setCombatStyle'; style: number; reason: string }
     | { type: 'useItemOnItem'; sourceSlot: number; targetSlot: number; reason: string }
     | { type: 'useItemOnLoc'; itemSlot: number; x: number; z: number; locId: number; reason: string }
@@ -703,6 +704,12 @@ export class AgentPanel {
                         return { success: true, message: 'Closing shop' };
                     }
                     return { success: false, message: 'Failed to close shop (shop may not be open)' };
+
+                case 'closeModal':
+                    if (this.client.closeModal()) {
+                        return { success: true, message: 'Closing modal interface' };
+                    }
+                    return { success: false, message: 'Failed to close modal (no modal open)' };
 
                 case 'setCombatStyle':
                     if (this.client.setCombatStyle(action.style)) {

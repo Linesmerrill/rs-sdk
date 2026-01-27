@@ -4,26 +4,27 @@ Successful patterns for bank interactions.
 
 ## Opening the Bank
 
-Banker NPCs are more reliable than bank booths:
 
 ```typescript
-// Find banker NPC
-const banker = ctx.sdk.findNearbyNpc(/banker/i);
-if (banker) {
-    const bankOpt = banker.optionsWithIndex.find(o => /bank/i.test(o.text));
-    await ctx.sdk.sendInteractNpc(banker.index, bankOpt.opIndex);
+// Open bank (finds banker NPC or booth automatically)
+const openResult = await ctx.bot.openBank();
+if (!openResult.success) {
+    ctx.log(`Failed to open bank: ${openResult.message}`);
 }
 
-// Wait for bank interface to open
-for (let i = 0; i < 15; i++) {
-    await new Promise(r => setTimeout(r, 500));
-    if (ctx.state()?.interface?.isOpen) {
-        ctx.log('Bank opened!');
-        break;
-    }
-    ctx.progress();
-}
+// Deposit item by name
+const depositResult = await ctx.bot.depositItem(/coins/i);  // deposits all
+const depositResult = await ctx.bot.depositItem(/sword/i, 1);  // deposits 1
+
+// Withdraw item by bank slot
+const withdrawResult = await ctx.bot.withdrawItem(0);  // withdraws 1 from slot 0
+const withdrawResult = await ctx.bot.withdrawItem(0, -1);  // withdraws all from slot 0
+
+// Close bank
+await ctx.bot.closeBank();
 ```
+
+
 
 ## Depositing Items
 
@@ -45,22 +46,17 @@ for (const ore of ores) {
 
 ## Deposit All of an Item
 
-Use `-1` as the quantity to deposit all of an item type: (tested for stacked items, not sure about non-stacking items, if you figure out please update!)
+Use `-1` as the quantity to deposit all of an item type. 
 
 ```typescript
-// WRONG - deposits only 1 item if count=1
-await ctx.sdk.sendBankDeposit(slot, count);
+// High-level (recommended)
+await ctx.bot.depositItem(/bones/i, -1);  // Deposits ALL bones (even if in 5 separate slots)
+await ctx.bot.depositItem(/coins/i, -1);  // Deposits ALL coins (stacked)
 
-// CORRECT - deposits ALL items of that type
-await ctx.sdk.sendBankDeposit(slot, -1);
-
-// Verify the deposit worked
-for (let i = 0; i < 10; i++) {
-    await new Promise(r => setTimeout(r, 300));
-    const inv = ctx.state()?.inventory ?? [];
-    if (!inv.some(i => /coins/i.test(i.name))) break;
-}
+// Low-level
+await ctx.sdk.sendBankDeposit(slot, -1);  // Deposits ALL items of that type from ANY slot
 ```
+
 
 ## Withdrawing Items
 
@@ -72,8 +68,11 @@ await ctx.sdk.sendBankWithdraw(bankSlot, count);
 ## Closing the Bank
 
 ```typescript
-await ctx.bot.closeShop();  // Works for bank interface too
-// Or wait for interface to close
+// High-level (recommended)
+await ctx.bot.closeBank();
+
+// Low-level (works for any modal interface)
+await ctx.sdk.sendCloseModal();
 await new Promise(r => setTimeout(r, 500));
 ```
 
@@ -91,32 +90,21 @@ await new Promise(r => setTimeout(r, 500));
 ```typescript
 async function bankTrip(ctx, itemPattern, bankCoords, returnCoords) {
     // Walk to bank
-    await walkWaypoints(ctx, WAYPOINTS_TO_BANK);
+    await ctx.bot.walkTo(bankCoords.x, bankCoords.z);
 
-    // Open bank
-    const banker = ctx.sdk.findNearbyNpc(/banker/i);
-    const bankOpt = banker?.optionsWithIndex.find(o => /bank/i.test(o.text));
-    if (banker && bankOpt) {
-        await ctx.sdk.sendInteractNpc(banker.index, bankOpt.opIndex);
+    // Open bank (automatically finds banker/booth)
+    const openResult = await ctx.bot.openBank();
+    if (!openResult.success) {
+        ctx.log(`Failed to open bank: ${openResult.message}`);
+        return;
     }
 
-    // Wait for bank
-    for (let i = 0; i < 15; i++) {
-        await new Promise(r => setTimeout(r, 500));
-        if (ctx.state()?.interface?.isOpen) break;
-        ctx.progress();
-    }
-
-    // Deposit items
-    const items = ctx.state()?.inventory.filter(i => itemPattern.test(i.name)) ?? [];
-    for (const item of items) {
-        await ctx.sdk.sendBankDeposit(item.slot, item.count);
-        await new Promise(r => setTimeout(r, 200));
-    }
+    // Deposit all items matching pattern (one call deposits ALL, even non-stackable)
+    await ctx.bot.depositItem(itemPattern, -1);
 
     // Close bank and return
-    await ctx.bot.closeShop();
-    await walkWaypoints(ctx, WAYPOINTS_TO_RESOURCE);
+    await ctx.bot.closeBank();
+    await ctx.bot.walkTo(returnCoords.x, returnCoords.z);
 }
 ```
 

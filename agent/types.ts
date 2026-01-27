@@ -243,6 +243,7 @@ export type BotAction =
     | { type: 'shopBuy'; slot: number; amount: number; reason: string }
     | { type: 'shopSell'; slot: number; amount: number; reason: string }
     | { type: 'closeShop'; reason: string }
+    | { type: 'closeModal'; reason: string }
     | { type: 'setCombatStyle'; style: number; reason: string }
     | { type: 'useItemOnItem'; sourceSlot: number; targetSlot: number; reason: string }
     | { type: 'useItemOnLoc'; itemSlot: number; x: number; z: number; locId: number; reason: string }
