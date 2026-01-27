@@ -80,6 +80,14 @@ export interface AttackResult {
     reason?: 'npc_not_found' | 'no_attack_option' | 'out_of_reach' | 'already_in_combat' | 'timeout';
 }
 
+export interface CastSpellResult {
+    success: boolean;
+    message: string;
+    hit?: boolean;        // True if spell hit (XP gained), false if splash
+    xpGained?: number;    // Magic XP gained (only on hit)
+    reason?: 'npc_not_found' | 'out_of_reach' | 'no_runes' | 'timeout';
+}
+
 export interface OpenDoorResult {
     success: boolean;
     message: string;
@@ -1878,6 +1886,124 @@ export class BotActions {
                 success: false,
                 message: `Timeout waiting to attack ${npc.name}`,
                 reason: 'timeout'
+            };
+        }
+    }
+
+    /**
+     * Casts a combat spell on an NPC and waits for the result.
+     *
+     * @param target - NPC to cast on (can be NearbyNpc object, name string, or RegExp pattern)
+     * @param spellComponent - The spell component ID (e.g., 1152 for Wind Strike)
+     * @param timeout - How long to wait for spell result in ms (default: 3000)
+     *
+     * Returns:
+     * - success: true if spell was cast (hit or splash)
+     * - hit: true if spell hit (XP gained), false if splash (no XP)
+     * - xpGained: Magic XP gained on hit
+     *
+     * Detects these failure modes:
+     * - "I can't reach that!" - obstacle between player and NPC (gate, fence, wall)
+     * - "You do not have enough runes" - missing runes for the spell
+     *
+     * When blocked by an obstacle, use bot.openDoor() to open the gate/door, then retry.
+     */
+    async castSpellOnNpc(
+        target: NearbyNpc | string | RegExp,
+        spellComponent: number,
+        timeout: number = 3000
+    ): Promise<CastSpellResult> {
+        const npc = this.resolveNpc(target);
+        if (!npc) {
+            return { success: false, message: `NPC not found: ${target}`, reason: 'npc_not_found' };
+        }
+
+        // Record starting state
+        const startState = this.sdk.getState();
+        if (!startState) {
+            return { success: false, message: 'No game state available' };
+        }
+        const startTick = startState.tick;
+        const startMagicXp = startState.skills.find(s => s.name === 'Magic')?.experience ?? 0;
+
+        // Send the spell
+        const result = await this.sdk.sendSpellOnNpc(npc.index, spellComponent);
+        if (!result.success) {
+            return { success: false, message: result.message };
+        }
+
+        // Wait for result: XP gain (hit), error message (blocked), or timeout (splash)
+        try {
+            const finalState = await this.sdk.waitForCondition(state => {
+                // Check for failure messages
+                for (const msg of state.gameMessages) {
+                    if (msg.tick > startTick) {
+                        const text = msg.text.toLowerCase();
+                        if (text.includes("can't reach") || text.includes("cannot reach")) {
+                            return true; // Blocked by obstacle
+                        }
+                        if (text.includes("do not have enough") || text.includes("don't have enough")) {
+                            return true; // No runes
+                        }
+                    }
+                }
+
+                // Check for XP gain (spell hit)
+                const currentMagicXp = state.skills.find(s => s.name === 'Magic')?.experience ?? 0;
+                if (currentMagicXp > startMagicXp) {
+                    return true; // Hit!
+                }
+
+                return false;
+            }, timeout);
+
+            // Determine what happened
+            for (const msg of finalState.gameMessages) {
+                if (msg.tick > startTick) {
+                    const text = msg.text.toLowerCase();
+                    if (text.includes("can't reach") || text.includes("cannot reach")) {
+                        return {
+                            success: false,
+                            message: `Cannot reach ${npc.name} - obstacle in the way`,
+                            reason: 'out_of_reach'
+                        };
+                    }
+                    if (text.includes("do not have enough") || text.includes("don't have enough")) {
+                        return {
+                            success: false,
+                            message: `Not enough runes to cast spell`,
+                            reason: 'no_runes'
+                        };
+                    }
+                }
+            }
+
+            // Check for XP gain
+            const finalMagicXp = finalState.skills.find(s => s.name === 'Magic')?.experience ?? 0;
+            const xpGained = finalMagicXp - startMagicXp;
+            if (xpGained > 0) {
+                return {
+                    success: true,
+                    message: `Hit ${npc.name} for ${xpGained} Magic XP`,
+                    hit: true,
+                    xpGained
+                };
+            }
+
+            // No XP gained but no error - splash
+            return {
+                success: true,
+                message: `Splashed on ${npc.name}`,
+                hit: false,
+                xpGained: 0
+            };
+        } catch {
+            // Timeout - assume splash (spell animation played but no XP)
+            return {
+                success: true,
+                message: `Splashed on ${npc.name} (timeout)`,
+                hit: false,
+                xpGained: 0
             };
         }
     }

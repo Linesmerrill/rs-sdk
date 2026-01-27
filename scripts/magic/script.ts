@@ -163,7 +163,6 @@ async function magicTrainingLoop(ctx: ScriptContext): Promise<void> {
         ctx.log(`Gate: ${gateResult.message}`);
     }
 
-    let lastXp = stats.startXp;
     let noTargetCount = 0;
 
     // Main loop
@@ -182,21 +181,9 @@ async function magicTrainingLoop(ctx: ScriptContext): Promise<void> {
             continue;
         }
 
-        // Check current stats
-        const currentMagic = ctx.sdk.getSkill('Magic');
-        const currentXp = currentMagic?.experience ?? 0;
-        const currentLevel = currentMagic?.baseLevel ?? 1;
-
-        // Detect XP gain (hit vs splash)
-        if (currentXp > lastXp) {
-            const xpGained = currentXp - lastXp;
-            stats.hits++;
-            ctx.log(`HIT! +${xpGained.toFixed(1)} XP (total: ${currentXp}, level ${currentLevel})`);
-            lastXp = currentXp;
-            ctx.progress();
-        }
-
         // Check if we've reached level 10
+        const currentMagic = ctx.sdk.getSkill('Magic');
+        const currentLevel = currentMagic?.baseLevel ?? 1;
         if (currentLevel >= 10) {
             ctx.log('*** GOAL REACHED: Magic level 10! ***');
             break;
@@ -244,40 +231,37 @@ async function magicTrainingLoop(ctx: ScriptContext): Promise<void> {
             continue;
         }
 
-        // Cast spell on target
+        // Cast spell on target using high-level API
         if (stats.casts % 5 === 0 || stats.casts === 0) {
             const currentRunes = getRuneCounts(ctx);
             ctx.log(`Casting ${spell.name} on ${target.name} (cast #${stats.casts + 1}, dist=${target.distance}, runes: air=${currentRunes.air}, mind=${currentRunes.mind})`);
         }
 
-        const startTick = ctx.state()?.tick ?? 0;
-        await ctx.sdk.sendSpellOnNpc(target.index, spell.spell);
+        const castResult = await ctx.bot.castSpellOnNpc(target, spell.spell);
         stats.casts++;
         stats.lastCastTime = now;
-        ctx.progress();
 
-        // Wait for spell animation and check for failure
-        await new Promise(r => setTimeout(r, 1500));
-
-        // Check for "can't reach" message - likely gate is closed
-        const afterState = ctx.state();
-        if (afterState) {
-            for (const msg of afterState.gameMessages) {
-                if (msg.tick > startTick && msg.text.toLowerCase().includes("can't reach")) {
-                    ctx.log(`Can't reach target - trying to open gate`);
-                    const gateResult = await ctx.bot.openDoor(/gate/i);
-                    ctx.log(`Gate: ${gateResult.message}`);
-                    if (gateResult.success) {
-                        // Walk inside after opening
-                        await ctx.bot.walkTo(CHICKEN_COOP.x - 3, CHICKEN_COOP.z);
-                    }
-                    ctx.progress();
-                    break;
-                }
+        if (castResult.success) {
+            if (castResult.hit) {
+                stats.hits++;
+                ctx.log(`HIT! ${castResult.message}`);
             }
+            // Splash is still success, just no XP
+        } else if (castResult.reason === 'out_of_reach') {
+            // Gate likely closed - try to open it
+            ctx.log(`Can't reach target - trying to open gate`);
+            const gateResult = await ctx.bot.openDoor(/gate/i);
+            ctx.log(`Gate: ${gateResult.message}`);
+            if (gateResult.success) {
+                await ctx.bot.walkTo(CHICKEN_COOP.x - 3, CHICKEN_COOP.z);
+            }
+        } else if (castResult.reason === 'no_runes') {
+            ctx.log('Out of runes!');
+            break;
         }
 
-        await new Promise(r => setTimeout(r, 1000));
+        ctx.progress();
+        await new Promise(r => setTimeout(r, 500));
     }
 
     // Final report
