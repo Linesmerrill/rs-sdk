@@ -231,7 +231,7 @@ export async function handleHiscoresPage(url: URL): Promise<Response | null> {
 
     if (category === -1 || category === 0) {
         // Overall - query hiscore_large
-        let query = db
+        const query = db
             .selectFrom('hiscore_large')
             .innerJoin('account', 'account.id', 'hiscore_large.account_id')
             .select(['account.username', 'hiscore_large.level', 'hiscore_large.value'])
@@ -264,7 +264,7 @@ export async function handleHiscoresPage(url: URL): Promise<Response | null> {
         const skillIndex = category - 1;
         const skillName = SKILL_NAMES[skillIndex];
         if (skillName) {
-            let query = db
+            const query = db
                 .selectFrom('hiscore')
                 .innerJoin('account', 'account.id', 'hiscore.account_id')
                 .select(['account.username', 'hiscore.level', 'hiscore.value'])

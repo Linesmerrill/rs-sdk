@@ -114,6 +114,48 @@ export class BotActions {
 
     // ============ Porcelain: UI Helpers ============
 
+    /**
+     * Skip tutorial by navigating dialogs and talking to tutorial NPCs.
+     * This is a porcelain method - domain logic that was moved from bot client.
+     */
+    async skipTutorial(): Promise<ActionResult> {
+        const state = this.sdk.getState();
+        if (!state?.inGame) {
+            return { success: false, message: 'Not in game' };
+        }
+
+        // If dialog open, navigate it
+        if (state.dialog.isOpen) {
+            if (state.dialog.isWaiting) {
+                return { success: false, message: 'Waiting for dialog' };
+            }
+
+            const options = state.dialog.options;
+            if (options.length > 0) {
+                // Look for affirmative option
+                const yesOption = options.find(o =>
+                    o.text.toLowerCase().includes('yes')
+                );
+                const idx = yesOption ? yesOption.index : 0;
+                await this.sdk.sendClickDialog(idx);
+                return { success: true, message: `Selected option ${idx}` };
+            }
+
+            // Click continue
+            await this.sdk.sendClickDialog(0);
+            return { success: true, message: 'Clicked continue' };
+        }
+
+        // Find tutorial NPC
+        const guide = this.sdk.findNearbyNpc(/runescape guide|guide|tutorial/i);
+        if (guide) {
+            await this.sdk.sendInteractNpc(guide.index, 0); // Talk
+            return { success: true, message: `Talking to ${guide.name}` };
+        }
+
+        return { success: false, message: 'No tutorial NPC found' };
+    }
+
     async dismissBlockingUI(): Promise<void> {
         const maxAttempts = 10;
         for (let i = 0; i < maxAttempts; i++) {
@@ -1268,10 +1310,10 @@ export class BotActions {
                 }
 
                 if (!buttonClicked) {
-                    await this.sdk.sendClickInterface(targetIndex);
+                    await this.sdk.sendClickInterfaceOption(targetIndex);
                     buttonClicked = true;
                 } else if (state.interface.options.length > 0 && state.interface.options[0]) {
-                    await this.sdk.sendClickInterface(state.interface.options[0].index);
+                    await this.sdk.sendClickInterfaceOption(0);
                 }
                 await new Promise(r => setTimeout(r, 300));
                 continue;
@@ -1478,31 +1520,33 @@ export class BotActions {
                         o.text.toLowerCase().includes(product.toLowerCase())
                     );
                     if (productOption) {
-                        await this.sdk.sendClickInterface(productOption.index);
+                        await this.sdk.sendClickInterfaceOption(productOption.index);
                         await new Promise(r => setTimeout(r, 300));
                         continue;
                     }
                 }
 
-                // Leather crafting interface (2311) uses button indices:
-                // 0=leather body (lvl 14), 1=leather chaps (lvl 18), 2=leather gloves (lvl 1)
-                // Default to gloves (index 2) for level 1 crafting
+                // Leather crafting interface (2311) - options are 1-indexed in state but
+                // sendClickInterfaceOption uses 0-based array indices.
+                // option.index 1 = leather body (lvl 14), array idx 0
+                // option.index 2 = leather gloves (lvl 1), array idx 1
+                // option.index 3 = leather chaps (lvl 18), array idx 2
                 if (state.interface.interfaceId === 2311) {
-                    // Map product names to interface indices
-                    let optionIndex = 2; // Default: gloves (lowest level requirement)
+                    // Map product names to array indices (0-based)
+                    let optionIndex = 1; // Default: gloves (array idx 1, lowest level requirement)
                     if (product) {
                         const productLower = product.toLowerCase();
                         if (productLower.includes('body') || productLower.includes('armour')) {
-                            optionIndex = 0;
+                            optionIndex = 0; // array idx 0 -> option.index 1 = body
                         } else if (productLower.includes('chaps') || productLower.includes('legs')) {
-                            optionIndex = 1;
+                            optionIndex = 2; // array idx 2 -> option.index 3 = chaps
                         } else if (productLower.includes('glove') || productLower.includes('vamb')) {
-                            optionIndex = 2;
+                            optionIndex = 1; // array idx 1 -> option.index 2 = gloves
                         }
                     }
-                    await this.sdk.sendClickInterface(optionIndex);
+                    await this.sdk.sendClickInterfaceOption(optionIndex);
                 } else if (state.interface.options.length > 0 && state.interface.options[0]) {
-                    await this.sdk.sendClickInterface(state.interface.options[0].index);
+                    await this.sdk.sendClickInterfaceOption(0);
                 }
                 await new Promise(r => setTimeout(r, 300));
                 continue;
@@ -1694,8 +1738,8 @@ export class BotActions {
             return { success: false, message: 'Smithing interface did not open', reason: 'interface_not_opened' };
         }
 
-        // Click the smithing component
-        const clickResult = await this.sdk.sendClickInterfaceComponent(componentId, 1);
+        // Click the smithing component (uses INV_BUTTON)
+        const clickResult = await this.sdk.sendClickComponentWithOption(componentId, 1);
         if (!clickResult.success) {
             return { success: false, message: 'Failed to click smithing option', reason: 'interface_not_opened' };
         }

@@ -77,7 +77,7 @@ runTest({
             // Click first option to make the potion
             if (currentState.interface.options.length > 0 && currentState.interface.options[0]) {
                 console.log(`  Clicking: ${currentState.interface.options[0].text}`);
-                await sdk.sendClickInterface(currentState.interface.options[0].index);
+                await sdk.sendClickInterfaceOption(0);
             }
             await sleep(500);
             continue;

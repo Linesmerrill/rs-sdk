@@ -48,7 +48,7 @@ runTest({
     await sleep(300);
 
     console.log('Casting Varrock Teleport...');
-    await sdk.sendClickInterfaceComponent(Spells.VARROCK_TELEPORT, 1);
+    await sdk.sendClickComponent(Spells.VARROCK_TELEPORT);
 
     // Wait for position to change
     try {

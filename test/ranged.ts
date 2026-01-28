@@ -25,30 +25,27 @@ runTest({
 }, async ({ sdk, bot }) => {
     console.log('Goal: Attack NPCs with ranged to gain Ranged XP');
 
+    // Wait for game state to be ready (save file loaded)
+    await sdk.waitForCondition(s => (s.player?.worldX ?? 0) > 0 && s.inventory.length > 0, 10000);
+    await sleep(500);
+
     const initialLevel = sdk.getSkill('Ranged')?.baseLevel ?? 1;
     const initialXp = sdk.getSkill('Ranged')?.experience ?? 0;
     console.log(`Initial Ranged: level ${initialLevel}, xp ${initialXp}`);
 
-    // Equip bow
+    // Equip bow and arrows using high-level action
     const bow = sdk.findInventoryItem(/bow/i);
     if (bow) {
-        const wieldOpt = bow.optionsWithIndex.find(o => /wield|equip/i.test(o.text));
-        if (wieldOpt) {
-            console.log(`Equipping ${bow.name}`);
-            await sdk.sendUseItem(bow.slot, wieldOpt.opIndex);
-            await sleep(500);
-        }
+        console.log(`Equipping ${bow.name}`);
+        await bot.equipItem(bow);
+        await sleep(500);
     }
 
-    // Equip arrows
     const arrows = sdk.findInventoryItem(/arrow/i);
     if (arrows) {
-        const wieldOpt = arrows.optionsWithIndex.find(o => /wield|equip/i.test(o.text));
-        if (wieldOpt) {
-            console.log(`Equipping ${arrows.name}`);
-            await sdk.sendUseItem(arrows.slot, wieldOpt.opIndex);
-            await sleep(500);
-        }
+        console.log(`Equipping ${arrows.name}`);
+        await bot.equipItem(arrows);
+        await sleep(500);
     }
 
     let attacks = 0;

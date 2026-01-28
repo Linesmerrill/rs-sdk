@@ -143,7 +143,7 @@ export interface DialogState {
 export interface InterfaceState {
     isOpen: boolean;
     interfaceId: number;
-    options: Array<{ index: number; text: string }>;
+    options: Array<{ index: number; text: string; componentId: number }>;
 }
 
 export interface ShopItem {
@@ -222,10 +222,14 @@ export type BotAction =
     | { type: 'talkToNpc'; npcIndex: number; reason: string }
     | { type: 'interactNpc'; npcIndex: number; optionIndex: number; reason: string }
     | { type: 'clickDialogOption'; optionIndex: number; reason: string }
-    | { type: 'clickInterfaceOption'; optionIndex: number; reason: string }
-    | { type: 'clickInterfaceComponent'; componentId: number; optionIndex?: number; reason: string }
+    // clickComponent: IF_BUTTON packet - for simple buttons, spellcasting, etc.
+    | { type: 'clickComponent'; componentId: number; reason: string }
+    // clickComponentWithOption: INV_BUTTON packet - for components with inventory operations (smithing, crafting, etc.)
+    | { type: 'clickComponentWithOption'; componentId: number; optionIndex: number; reason: string }
+    // TODO: acceptCharacterDesign should be parameterized as (gender, kits[7], colours[5])
+    // Currently uses hidden client state - the SDK cannot set design values before accepting.
+    // For now, bot client uses whatever design state exists (usually defaults or randomized).
     | { type: 'acceptCharacterDesign'; reason: string }
-    | { type: 'skipTutorial'; reason: string }
     | { type: 'walkTo'; x: number; z: number; running?: boolean; reason: string }
     | { type: 'useInventoryItem'; slot: number; optionIndex: number; reason: string }
     | { type: 'useEquipmentItem'; slot: number; optionIndex: number; reason: string }
@@ -245,7 +249,8 @@ export type BotAction =
     | { type: 'spellOnItem'; slot: number; spellComponent: number; reason: string }
     | { type: 'setTab'; tabIndex: number; reason: string }
     | { type: 'bankDeposit'; slot: number; amount: number; reason: string }
-    | { type: 'bankWithdraw'; slot: number; amount: number; reason: string };
+    | { type: 'bankWithdraw'; slot: number; amount: number; reason: string }
+    | { type: 'skipTutorial'; reason: string };
 
 export interface ActionResult {
     success: boolean;

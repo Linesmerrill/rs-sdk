@@ -577,7 +577,7 @@ async function smithItems(ctx: ScriptContext): Promise<number> {
 
                 // Try clicking first option
                 if (s.interface.options.length > 0) {
-                    await ctx.sdk.sendClickInterface(s.interface.options[0]?.index ?? 0);
+                    await ctx.sdk.sendClickInterfaceOption(0);
                     break;
                 }
             }

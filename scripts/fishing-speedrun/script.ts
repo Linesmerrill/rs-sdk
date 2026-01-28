@@ -373,7 +373,7 @@ async function cookAllFish(ctx: ScriptContext, stats: Stats): Promise<void> {
             const firstInterfaceOpt = state?.interface?.options[0];
             if (state?.interface?.isOpen && firstInterfaceOpt) {
                 ctx.log('Clicking cook option...');
-                await ctx.sdk.sendClickInterface(firstInterfaceOpt.index);
+                await ctx.sdk.sendClickInterfaceOption(0);
                 // After clicking, wait for batch cooking to complete
                 let noChange = 0;
                 while (noChange < 10 && countRawFish(ctx) > 0) {

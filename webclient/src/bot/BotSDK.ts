@@ -319,10 +319,11 @@ export class BotStateCollector {
         const isOpen = interfaceId !== -1;
 
         // Get interface options using client's method if available
-        let options: Array<{ index: number; text: string }> = [];
+        // Include componentId so SDK can click directly without lookup
+        let options: Array<{ index: number; text: string; componentId: number }> = [];
         if (isOpen && typeof this.client.getInterfaceOptions === 'function') {
             const rawOptions = this.client.getInterfaceOptions();
-            options = rawOptions.map((opt: any) => ({ index: opt.index, text: opt.text }));
+            options = rawOptions.map((opt: any) => ({ index: opt.index, text: opt.text, componentId: opt.componentId }));
         }
 
         return { isOpen, interfaceId, options };
@@ -1489,17 +1490,19 @@ function getBotUsername(): string {
     return params.get('bot') || 'default';
 }
 
-// SDK action types (matches AgentPanel)
+// SDK action types - pure primitives that map to game protocol
+// Domain logic (skipTutorial, etc.) lives in BotActions, not here
 type BotAction =
     | { type: 'none'; reason: string }
     | { type: 'wait'; reason: string; ticks?: number }
     | { type: 'talkToNpc'; npcIndex: number; reason: string }
     | { type: 'interactNpc'; npcIndex: number; optionIndex: number; reason: string }
     | { type: 'clickDialogOption'; optionIndex: number; reason: string }
-    | { type: 'clickInterfaceOption'; optionIndex: number; reason: string }
-    | { type: 'clickInterfaceComponent'; componentId: number; optionIndex?: number; reason: string }
+    // clickComponent: IF_BUTTON packet - for simple buttons, spellcasting, etc.
+    | { type: 'clickComponent'; componentId: number; reason: string }
+    // clickComponentWithOption: INV_BUTTON packet - for components with inventory operations (smithing, crafting, etc.)
+    | { type: 'clickComponentWithOption'; componentId: number; optionIndex: number; reason: string }
     | { type: 'acceptCharacterDesign'; reason: string }
-    | { type: 'skipTutorial'; reason: string }
     | { type: 'walkTo'; x: number; z: number; running?: boolean; reason: string }
     | { type: 'useInventoryItem'; slot: number; optionIndex: number; reason: string }
     | { type: 'dropItem'; slot: number; reason: string }
@@ -1519,7 +1522,8 @@ type BotAction =
     | { type: 'setTab'; tabIndex: number; reason: string }
     | { type: 'say'; message: string; reason: string }
     | { type: 'bankDeposit'; slot: number; amount: number; reason: string }
-    | { type: 'bankWithdraw'; slot: number; amount: number; reason: string };
+    | { type: 'bankWithdraw'; slot: number; amount: number; reason: string }
+    | { type: 'skipTutorial'; reason: string };
 
 // HTML Overlay class for displaying state and SDK actions
 export class BotOverlay {
@@ -1972,12 +1976,13 @@ export class BotOverlay {
             case 'pickupItem': return `Pickup item ${action.itemId} at (${action.x}, ${action.z})`;
             case 'interactGroundItem': return `Interact ground item ${action.itemId} at (${action.x}, ${action.z})`;
             case 'clickDialogOption': return `Dialog option ${action.optionIndex}`;
+            case 'clickComponent': return `Click component ${action.componentId}`;
+            case 'clickComponentWithOption': return `Click component ${action.componentId} option ${action.optionIndex}`;
             case 'useItemOnItem': return `Use slot ${action.sourceSlot} on ${action.targetSlot}`;
             case 'shopBuy': return `Buy slot ${action.slot} x${action.amount}`;
             case 'shopSell': return `Sell slot ${action.slot} x${action.amount}`;
             case 'wait': return `Wait ${action.ticks || 1} ticks`;
             case 'acceptCharacterDesign': return 'Accept character design';
-            case 'skipTutorial': return 'Skip tutorial';
             case 'say': return `Say: ${action.message}`;
             default: return action.type;
         }
@@ -2068,11 +2073,12 @@ export class BotOverlay {
         }
 
         // Collect interface options (for crafting menus like fletching)
-        const interfaceOptions: Array<{ index: number; text: string }> = [];
+        // Include componentId so SDK can click directly without lookup
+        const interfaceOptions: Array<{ index: number; text: string; componentId: number }> = [];
         if (this.client.isViewportInterfaceOpen()) {
             const options = this.client.getInterfaceOptions();
             for (const opt of options) {
-                interfaceOptions.push({ index: opt.index, text: opt.text });
+                interfaceOptions.push({ index: opt.index, text: opt.text, componentId: opt.componentId });
             }
         }
 
@@ -2192,34 +2198,21 @@ export class BotOverlay {
                         'Failed to click dialog option'
                     );
 
-                case 'clickInterfaceOption':
+                case 'clickComponent':
+                    // IF_BUTTON packet - for simple buttons, spellcasting, etc.
                     return this.wrapBool(
-                        this.client.clickInterfaceOption(action.optionIndex),
-                        `Clicked interface option ${action.optionIndex}`,
-                        'Failed to click interface option'
+                        this.client.clickComponent(action.componentId),
+                        `Clicked component ${action.componentId}`,
+                        'Failed to click component'
                     );
 
-                case 'clickInterfaceComponent': {
-                    // Check if component has inventory operations (like smithing interface)
-                    const com = Component.types[action.componentId];
-                    const hasIops = com && com.iop && com.iop.some((op: string | null) => op);
-
-                    if (hasIops) {
-                        // Use INV_BUTTON for components with iops (smithing, etc.)
-                        return this.wrapBool(
-                            this.client.clickInterfaceIop(action.componentId, action.optionIndex ?? 1),
-                            `Clicked interface component ${action.componentId} option ${action.optionIndex ?? 1}`,
-                            'Failed to click interface component'
-                        );
-                    } else {
-                        // Use simple IF_BUTTON for simple buttons (spellcasting, etc.)
-                        return this.wrapBool(
-                            this.client.clickComponent(action.componentId),
-                            `Clicked interface component ${action.componentId}`,
-                            'Failed to click interface component'
-                        );
-                    }
-                }
+                case 'clickComponentWithOption':
+                    // INV_BUTTON packet - for components with inventory operations (smithing, crafting, etc.)
+                    return this.wrapBool(
+                        this.client.clickInterfaceIop(action.componentId, action.optionIndex),
+                        `Clicked component ${action.componentId} option ${action.optionIndex}`,
+                        'Failed to click component with option'
+                    );
 
                 case 'useItemOnItem':
                     return this.wrapBool(
@@ -2314,65 +2307,13 @@ export class BotOverlay {
                     );
 
                 case 'acceptCharacterDesign':
+                    // TODO: Should be parameterized as (gender, kits[7], colours[5])
+                    // Currently uses hidden client state
                     return this.wrapBool(
                         this.client.acceptCharacterDesign(),
                         'Character design accepted',
                         'Failed to accept character design'
                     );
-
-                case 'skipTutorial': {
-                    // Inline tutorial skip logic (mirrors Client.skipTutorial but synchronous)
-                    if (!this.client.ingame) {
-                        return { success: false, message: 'Not in game yet' };
-                    }
-
-                    // If a dialog is open, try to interact with it
-                    if (this.client.isDialogOpen()) {
-                        if (this.client.isWaitingForDialog()) {
-                            return { success: false, message: 'Waiting for dialog response...' };
-                        }
-
-                        const options = this.client.getDialogOptions();
-                        if (options.length > 0) {
-                            // Look for "Yes please" or similar affirmative option
-                            for (let i = 0; i < options.length; i++) {
-                                const text = options[i].text.toLowerCase();
-                                if (text.includes('yes')) {
-                                    this.client.clickDialogOption(i + 1);
-                                    return { success: true, message: `Selected: ${options[i].text}` };
-                                }
-                            }
-                            // If no clear yes option, just click option 1
-                            this.client.clickDialogOption(1);
-                            return { success: true, message: `Selected: ${options[0]?.text || 'option 1'}` };
-                        }
-
-                        // No options available, click continue
-                        if (this.client.clickDialogOption(0)) {
-                            return { success: true, message: 'Clicked continue' };
-                        }
-                        return { success: false, message: 'Dialog open but cannot interact' };
-                    }
-
-                    // Find and talk to RuneScape Guide
-                    const guideIndex = this.client.findNpcByName('RuneScape Guide');
-                    if (guideIndex >= 0) {
-                        this.client.talkToNpc(guideIndex);
-                        return { success: true, message: 'Talking to RuneScape Guide' };
-                    }
-
-                    // Try other common tutorial NPC names
-                    const alternateNames = ['Guide', 'Tutorial'];
-                    for (const name of alternateNames) {
-                        const idx = this.client.findNpcByName(name);
-                        if (idx >= 0) {
-                            this.client.talkToNpc(idx);
-                            return { success: true, message: `Talking to ${name}` };
-                        }
-                    }
-
-                    return { success: false, message: 'No tutorial NPC found nearby' };
-                }
 
                 case 'interactGroundItem':
                     return this.wrapBool(
@@ -2387,6 +2328,9 @@ export class BotOverlay {
                         `Said: ${action.message}`,
                         'Failed to send message'
                     );
+
+                case 'skipTutorial':
+                    return this.client.skipTutorial();
 
                 default:
                     return { success: false, message: `Unknown action type: ${(action as any).type}` };

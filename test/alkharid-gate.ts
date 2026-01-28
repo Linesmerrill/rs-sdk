@@ -14,7 +14,7 @@ runTest({
     name: 'Al Kharid Gate Test',
     saveConfig: { position: { x: 3267, z: 3228 }, coins: 20 },
 }, async ({ sdk, bot }) => {
-    await sdk.waitForCondition(s => s.player?.worldX > 0, 10000);
+    await sdk.waitForCondition(s => (s.player?.worldX ?? 0) > 0, 10000);
 
     // Find the toll gate
     const gate = sdk.getNearbyLocs().find(l => /gate/i.test(l.name));

@@ -442,20 +442,38 @@ export class BotSDK {
         return this.sendAction({ type: 'clickDialogOption', optionIndex: option, reason: 'SDK' });
     }
 
-    async sendClickInterface(option: number): Promise<ActionResult> {
-        return this.sendAction({ type: 'clickInterfaceOption', optionIndex: option, reason: 'SDK' });
+    /** Click a component using IF_BUTTON packet - for simple buttons, spellcasting, etc. */
+    async sendClickComponent(componentId: number): Promise<ActionResult> {
+        return this.sendAction({ type: 'clickComponent', componentId, reason: 'SDK' });
     }
 
-    async sendClickInterfaceComponent(componentId: number, optionIndex: number = 1): Promise<ActionResult> {
-        return this.sendAction({ type: 'clickInterfaceComponent', componentId, optionIndex, reason: 'SDK' });
+    /** Click a component using INV_BUTTON packet - for components with inventory operations (smithing, crafting, etc.) */
+    async sendClickComponentWithOption(componentId: number, optionIndex: number = 1): Promise<ActionResult> {
+        return this.sendAction({ type: 'clickComponentWithOption', componentId, optionIndex, reason: 'SDK' });
+    }
+
+    /** Click an interface option by index. Convenience wrapper that looks up componentId from state. */
+    async sendClickInterfaceOption(optionIndex: number): Promise<ActionResult> {
+        const state = this.getState();
+        if (!state?.interface?.isOpen) {
+            return { success: false, message: 'No interface open' };
+        }
+
+        const options = state.interface.options;
+        if (optionIndex < 0 || optionIndex >= options.length) {
+            return { success: false, message: `Invalid option index ${optionIndex}, interface has ${options.length} options` };
+        }
+
+        const option = options[optionIndex];
+        if (!option) {
+            return { success: false, message: `Option ${optionIndex} not found` };
+        }
+
+        return this.sendClickComponent(option.componentId);
     }
 
     async sendAcceptCharacterDesign(): Promise<ActionResult> {
         return this.sendAction({ type: 'acceptCharacterDesign', reason: 'SDK' });
-    }
-
-    async sendSkipTutorial(): Promise<ActionResult> {
-        return this.sendAction({ type: 'skipTutorial', reason: 'SDK' });
     }
 
     async sendShopBuy(slot: number, amount: number = 1): Promise<ActionResult> {
@@ -504,6 +522,10 @@ export class BotSDK {
 
     async sendBankWithdraw(slot: number, amount: number = 1): Promise<ActionResult> {
         return this.sendAction({ type: 'bankWithdraw', slot, amount, reason: 'SDK' });
+    }
+
+    async sendSkipTutorial(): Promise<ActionResult> {
+        return this.sendAction({ type: 'skipTutorial', reason: 'SDK' });
     }
 
     // ============ Screenshot ============

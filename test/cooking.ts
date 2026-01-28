@@ -90,7 +90,7 @@ runTest({
         if (currentState?.interface.isOpen) {
             console.log(`Turn ${turn}: Interface open (id=${currentState.interface.interfaceId})`);
             if (currentState.interface.options.length > 0 && currentState.interface.options[0]) {
-                await sdk.sendClickInterface(currentState.interface.options[0].index);
+                await sdk.sendClickInterfaceOption(0);
             }
             await sleep(500);
             continue;

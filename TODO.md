@@ -20,12 +20,11 @@ Test with sonnet.
 
 
 
+Clean up sdk layers
+Refine sdk connection management
+Refine a runner-script in claude.md with nice feedback
 
-Remote usage works but needs to be refined. 
-connection management/reconnection 
-
-Repo needs to be a prompt that's all compatible, clean up scripts
-choose a scriptrunner + feedback paradigmn
+Repo needs to be a prompt that's all compatible
 consider typescript MCP again
 
 
