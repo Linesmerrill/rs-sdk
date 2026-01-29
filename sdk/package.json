@@ -25,9 +25,6 @@
   ],
   "author": "",
   "license": "MIT",
-  "dependencies": {
-    "@2004scape/rsmod-pathfinder": "github:MaxBittker/rsmod-pathfinder#71a5588"
-  },
   "peerDependencies": {
     "typescript": "^5"
   }

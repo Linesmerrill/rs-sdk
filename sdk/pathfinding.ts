@@ -1,6 +1,6 @@
 // Local pathfinding using bundled collision data
-import * as rsmod from '@2004scape/rsmod-pathfinder';
-import { CollisionType } from '@2004scape/rsmod-pathfinder';
+import * as rsmod from '../vendor/rsmod-pathfinder';
+import { CollisionType } from '../vendor/rsmod-pathfinder';
 import collisionData from './collision-data.json';
 
 let initialized = false;
