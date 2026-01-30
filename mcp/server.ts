@@ -17,6 +17,7 @@ import {
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { botManager } from './api/index.js';
+import { formatWorldState } from '../sdk/formatter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -206,6 +207,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (logs.length > 0) parts.push('');
             parts.push('── Result ──');
             parts.push(JSON.stringify(result, null, 2));
+          }
+
+          // Append formatted world state
+          const state = connection.sdk.getState();
+          if (state) {
+            parts.push('');
+            parts.push('── World State ──');
+            parts.push(formatWorldState(state, connection.sdk.getStateAge()));
           }
 
           const output = parts.length > 0 ? parts.join('\n') : '(no output)';

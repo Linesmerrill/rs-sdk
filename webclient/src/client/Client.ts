@@ -3737,7 +3737,7 @@ export class Client extends GameShell {
             // timers when a different tab is active, or the window has been minimized.
             // afk logout has to still happen after 90s of no activity (if allowed).
             // https://developer.chrome.com/blog/timer-throttling-in-chrome-88/
-            if (performance.now() - this.idleCycles > 90_000) {
+            if (performance.now() - this.idleCycles > 180_000) {
                 // 4500 ticks * 20ms = 90000ms
                 this.idleTimeout = 250;
                 // 500 ticks * 20ms = 10000ms
