@@ -60,10 +60,6 @@ async function handleRequests(parentPort: ParentPort, msg: any) {
                 const stopTimer = trackLoginTime.startTimer();
                 const response = await client.playerLogin(username, password, uid, socket, remoteAddress, reconnecting, hasSave);
 
-                if (!Environment.NODE_PRODUCTION) {
-                    response.staffmodlevel = 4; // dev (destructive commands)
-                }
-
                 parentPort.postMessage({
                     type: 'player_login',
                     socket,
@@ -74,11 +70,7 @@ async function handleRequests(parentPort: ParentPort, msg: any) {
                 });
                 stopTimer();
             } else {
-                let staffmodlevel = 0;
-
-                if (!Environment.NODE_PRODUCTION) {
-                    staffmodlevel = 4; // dev (destructive commands)
-                }
+                const staffmodlevel = 0;
 
                 const profile = Environment.NODE_PROFILE;
                 if (!fs.existsSync(`data/players/${profile}`)) {

@@ -170,6 +170,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           return errorResponse('code is required');
         }
 
+        const isLongCode = code.length > 2000;
+
         // Auto-connect if not already connected
         let connection = botManager.get(botName);
         if (!connection) {
@@ -215,6 +217,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             parts.push('');
             parts.push('── World State ──');
             parts.push(formatWorldState(state, connection.sdk.getStateAge()));
+          }
+
+          // Add reminder for long code
+          if (isLongCode) {
+            parts.push('');
+            parts.push('── Tip ──');
+            parts.push(`Long script detected. Consider writing to a .ts file and running with: bun run bots/${botName}/script.ts`);
           }
 
           const output = parts.length > 0 ? parts.join('\n') : '(no output)';

@@ -2,15 +2,31 @@
     <h1>RS-SDK</h1>
 </div>
 
-rs-sdk is a typescript library for connecting to and driving bots on a research-oriented economic role-playing mmo environment.
+[![Discord](https://img.shields.io/discord/1234567890?color=5865F2&logo=discord&logoColor=white)](https://discord.gg/3DcuU5cMJN)
+[![Hiscores](https://img.shields.io/badge/Hiscores-View%20Leaderboard-gold)](https://rs-sdk.com/hiscores)
 
-The intended play experience is to develop botting scripts to learn automation techniques, experiment with AI agents, and explore economic systems in a controlled setting.
-## Getting Started via claude code with a random username:
+rs-sdk is a typescript library for driving research-oriented bots inside a recognizable and complex economic role-playing mmo environment.
 
+The goal is to help people develop botting scripts to learn automation techniques, experiment with AI agents, and explore agent-agent collaboration and economics in a controlled setting.
+
+## Getting Started :
+Out of the box, you can connect to the provided demo server, but be sure to chose a name that is unique!
+rs-sdk was developed with special consideration towards use via agent loops, but it can be used as stand-alone typescript files
+
+With claude code:
 ```sh
 bun install
-claude "start a new bot with name $(whoami)$RANDOM"```
+claude "start a new bot with name: {username}"```
 ```
+Manually:
+```sh
+bun install
+bun scripts/create-bot.ts {username}
+bun bots/{username}/script.ts 
+```
+
+Then you can run your bot script:
+```sh
 
 > [!NOTE]
 > RS-SDK is a fork and extension of the base LostCity engine and client. LostCity is an amazing project without which this would not be possible. 
@@ -23,158 +39,15 @@ claude "start a new bot with name $(whoami)$RANDOM"```
 
 ---
 
-## Directory Structure
 
-| Directory | Description |
-|-----------|-------------|
-| `engine/` | Game server - handles world state, players, NPCs, game logic |
-| `content/` | Game assets - maps, models, scripts, sprites, music |
-| `webclient/` | TypeScript web client with BotSDK for automation |
-| `test/` | Test scripts for bot automation and shop interactions |
-
-### Engine (`engine/`)
-
-The game server handling world simulation, player logic, and network protocol.
-
-```
-engine/
-├── src/           # Server source code
-├── public/        # Static files served to clients
-│   ├── client/    # Standard web client build
-│   └── bot/       # Bot client build (with BotSDK)
-├── view/          # EJS templates (bot.ejs for bot interface)
-├── data/          # Runtime game data
-├── prisma/        # Database schema and migrations
-└── tools/         # Build and pack tools
-```
-
-### WebClient (`webclient/`)
-
-Browser-based game client ported to TypeScript.
-
-```
-webclient/
-├── src/
-│   ├── client/    # Standard client code
-│   └── bot/       # Bot-specific modules (BotSDK)
-├── out/           # Built client bundles
-│   ├── standard/  # Standard client output
-│   └── bot/       # Bot client output
-└── 3rdparty/      # Third-party dependencies
-```
-
-### Gateway (`gateway/`)
-
-WebSocket relay service connecting browser game clients to SDK automation scripts.
-
-```
-gateway/
-├── gateway.ts         # WebSocket router for bot ↔ SDK communication
-├── types.ts           # Gateway message protocol types
-├── run-recorder.ts    # Run logging and screenshots
-└── agent-state/       # Live state files per bot
-```
-
-
----
-
-## Commands
-
-### Root Level
-
-| Command | Description |
-|---------|-------------|
-| `./start.sh` | Interactive menu (Linux/macOS) |
-| `start.bat` | Interactive menu (Windows) |
-| `bun run start.ts` | Run interactive menu directly |
-
-The interactive menu provides options to:
-- Start the game server
-- Update all subprojects
-- Run web or Java client
-- Build clients
-- Change game version (225, 244, 245.2, 254)
-
-### Engine (`cd engine`)
-
-| Command | Description |
-|---------|-------------|
-| `bun start` | Install deps and start server |
-| `bun run dev` | Start with hot-reload (watch mode) |
-| `bun run quickstart` | Start without installing deps |
-| `bun run build` | Pack game content |
-| `bun run clean` | Clean build artifacts |
-| `bun run setup` | Configure server environment |
-| `bun run lint` | Run ESLint |
-
-**Database commands:**
-| Command | Description |
-|---------|-------------|
-| `bun run sqlite:migrate` | Apply SQLite migrations |
-| `bun run sqlite:reset` | Reset SQLite database |
-| `bun run db:migrate` | Apply MySQL migrations |
-| `bun run db:reset` | Reset MySQL database |
-
-### WebClient (`cd webclient`)
-
-| Command | Description |
-|---------|-------------|
-| `bun run build` | Build client bundles (standard + bot) |
-| `bun run build:dev` | Build in development mode |
-
-After building, copy to engine:
-```sh
-cp out/standard/client.js ../engine/public/client/
-cp out/bot/client.js ../engine/public/bot/
-```
-
-### Agent (`cd agent`)
-
-| Command | Description |
-|---------|-------------|
-| `bun run gateway` | Start gateway (unified sync + controller) |
-| `bun run gateway:dev` | Gateway with hot-reload |
-| `bun run agent` | Start Claude Agent service |
-| `bun run agent:dev` | Agent service with hot-reload |
-| `bun run cli` | Run agent CLI |
-| `bun cli.ts launch <bot> "goal"` | Launch browser + start agent |
-| `bun cli.ts status` | View connected bots |
-| `bun run login` | Automated login helper |
-
-### Java Client (`cd javaclient`)
-
-| Command | Description |
-|---------|-------------|
-| `./gradlew build` | Build the Java client |
-| `./gradlew run --args="10 0 highmem members 32"` | Run the Java client |
-
----
-
-## Workflow
-
-**Use the start script provided** - it handles a lot of common use cases. We're trying to reduce the barrier to entry by providing an all-inclusive script.
-
-### Content Development
-```sh
-cd engine && bun start
-# Server watches for script/config changes and auto-repacks
-```
-
-### Engine Development
-```sh
-cd engine && bun run dev
-# Server restarts on .ts file changes
-```
-
----
 
 ## Gameplay Modifications
 
 This server has a few modifications from the original game to make development and bot testing easier:
 
-- **Faster leveling** - The XP curve is flattened and sped up so high-level skills don't take as long to train
-- **Infinite run energy** - Players never run out of energy (enabled by default, can be toggled off)
-- **No random events** - Anti-bot random events can be disabled via config
+- **Faster leveling** - The XP curve is flattened and accelerated so high-level skills don't take as long to train
+- **Infinite run energy** - Players never run out of energy 
+- **No random events** - Anti-botting random events are disabled 
 
 ---
 

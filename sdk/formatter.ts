@@ -133,7 +133,10 @@ export function formatWorldState(state: BotWorldState, stateAgeMs?: number): str
 
     // Inventory
     lines.push('');
-    lines.push('## Inventory');
+    const usedSlots = state.inventory.length;
+    const maxSlots = 28;
+    const emptySlots = maxSlots - usedSlots;
+    lines.push(`## Inventory (${emptySlots} empty slots)`);
     if (state.inventory.length === 0) {
         lines.push('(Empty)');
     } else {

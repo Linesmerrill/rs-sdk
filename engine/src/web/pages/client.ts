@@ -7,16 +7,30 @@ import { tryParseInt } from '#/util/TryParse.js';
 import Environment from '#/util/Environment.js';
 
 export async function handleClientPage(url: URL): Promise<Response | null> {
+    // Bot client at / and /bot
     if (url.pathname === '/' || url.pathname === '/bot' || url.pathname === '/bot/') {
         const lowmem = tryParseInt(url.searchParams.get('lowmem'), 0);
         const botUsername = url.searchParams.get('bot') || 'default';
-        const template = url.pathname === '/bot' || url.pathname === '/bot/' ? 'view/bot.ejs' : 'view/client.ejs';
 
-        return new Response(await ejs.renderFile(template, {
+        return new Response(await ejs.renderFile('view/bot.ejs', {
             nodeid: Environment.NODE_ID,
             lowmem,
             members: Environment.NODE_MEMBERS,
             botUsername,
+            per_deployment_token: Environment.WEB_SOCKET_TOKEN_PROTECTION ? getPublicPerDeploymentToken() : ''
+        }), {
+            headers: { 'Content-Type': 'text/html' }
+        });
+    }
+
+    // Vanilla client at /vanilla
+    if (url.pathname === '/vanilla' || url.pathname === '/vanilla/') {
+        const lowmem = tryParseInt(url.searchParams.get('lowmem'), 0);
+
+        return new Response(await ejs.renderFile('view/client.ejs', {
+            nodeid: Environment.NODE_ID,
+            lowmem,
+            members: Environment.NODE_MEMBERS,
             per_deployment_token: Environment.WEB_SOCKET_TOKEN_PROTECTION ? getPublicPerDeploymentToken() : ''
         }), {
             headers: { 'Content-Type': 'text/html' }

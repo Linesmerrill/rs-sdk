@@ -2,42 +2,66 @@
 // SDK CLI - Dump world state for a connected bot
 //
 // Usage:
-//   bun sdk/cli.ts <username> <password>                    # Uses default demo server
+//   bun sdk/cli.ts <botname>                                # Loads from bots/<botname>/bot.env
+//   bun sdk/cli.ts <username> <password>                    # Direct credentials
 //   bun sdk/cli.ts <username> <password> --server <url>     # Custom server
-//   SERVER=localhost USERNAME=mybot PASSWORD=pw bun sdk/cli.ts  # Via env vars
+//   bun --env-file=bots/<name>/bot.env sdk/cli.ts           # Via --env-file
 //
 // Examples:
-//   bun sdk/cli.ts mybot secret
+//   bun sdk/cli.ts mybot
 //   bun sdk/cli.ts mybot secret --server localhost
-//   SERVER=localhost USERNAME=mybot PASSWORD=secret bun sdk/cli.ts
 
 import { BotSDK } from './index';
 import { formatWorldState } from './formatter';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 
 function printUsage() {
     console.log(`
 SDK CLI - Dump world state for a connected bot
 
 Usage:
-  bun sdk/cli.ts <username> [password] [options]
-  USERNAME=<user> bun sdk/cli.ts [options]
+  bun sdk/cli.ts <botname>                    # Loads from bots/<botname>/bot.env
+  bun sdk/cli.ts <username> <password>        # Direct credentials
+  bun --env-file=bots/<name>/bot.env sdk/cli.ts
 
 Options:
-  --server <host>   Server hostname (default: rs-sdk-demo.fly.dev)
+  --server <host>   Server hostname (default: from bot.env or rs-sdk-demo.fly.dev)
   --timeout <ms>    Connection timeout in ms (default: 5000)
   --help            Show this help
 
-Environment Variables:
-  BOT_USERNAME      Bot username (preferred, avoids macOS USERNAME conflict)
-  USERNAME          Bot username (fallback)
-  PASSWORD          Bot password (required for remote servers)
-  SERVER            Server hostname
-
 Examples:
-  bun sdk/cli.ts mybot --server localhost
-  bun sdk/cli.ts mybot secret
-  bun sdk/cli.ts mybot secret --server rs-sdk-demo.fly.dev
+  bun sdk/cli.ts mybot
+  bun sdk/cli.ts mybot secret --server localhost
 `.trim());
+}
+
+/**
+ * Try to load credentials from bots/<name>/bot.env
+ */
+function tryLoadBotEnv(botName: string): { username: string; password: string; server?: string } | null {
+    const envPath = join(process.cwd(), 'bots', botName, 'bot.env');
+    if (!existsSync(envPath)) return null;
+
+    const content = readFileSync(envPath, 'utf-8');
+    const env: Record<string, string> = {};
+
+    for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIndex = trimmed.indexOf('=');
+        if (eqIndex > 0) {
+            env[trimmed.slice(0, eqIndex).trim()] = trimmed.slice(eqIndex + 1).trim();
+        }
+    }
+
+    if (!env.BOT_USERNAME || !env.PASSWORD) return null;
+
+    return {
+        username: env.BOT_USERNAME,
+        password: env.PASSWORD,
+        server: env.SERVER
+    };
 }
 
 async function main() {
@@ -46,7 +70,7 @@ async function main() {
     // Parse args
     let username = process.env.BOT_USERNAME || process.env.USERNAME || '';
     let password = process.env.PASSWORD || '';
-    let server = process.env.SERVER || 'rs-sdk-demo.fly.dev';
+    let server = process.env.SERVER || '';
     let timeout = 5000;
 
     const positional: string[] = [];
@@ -64,9 +88,25 @@ async function main() {
         }
     }
 
-    // Positional args: <username> <password>
-    if (positional[0]) username = positional[0];
-    if (positional[1]) password = positional[1];
+    // Try to load from bots/<name>/bot.env if single positional arg
+    if (positional.length === 1 && !password) {
+        const botEnv = tryLoadBotEnv(positional[0]!);
+        if (botEnv) {
+            username = botEnv.username;
+            password = botEnv.password;
+            if (botEnv.server && !server) server = botEnv.server;
+        } else {
+            // Fall back to treating it as username
+            username = positional[0]!;
+        }
+    } else {
+        // Positional args: <username> <password>
+        if (positional[0]) username = positional[0];
+        if (positional[1]) password = positional[1];
+    }
+
+    // Default server if not set
+    if (!server) server = 'rs-sdk-demo.fly.dev';
 
     // Derive if local
     const isLocal = server === 'localhost' || server.startsWith('localhost:');

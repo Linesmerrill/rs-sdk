@@ -71,7 +71,16 @@ See `mcp/README.md` for detailed API reference.
 
 ## Script Runner API
 
-Scripts should leverage `runScript` to manage their connections, initialization, and timouts.
+Scripts should leverage `runScript` to manage their connections, initialization, and timeouts.
+
+**Run scripts:**
+```bash
+bun bots/{username}/script.ts
+```
+
+The runner automatically finds `bot.env` in the same directory as the script. Alternative methods:
+- `bun script.ts {botname}` - loads `bots/{botname}/bot.env`
+- `bun --env-file=bots/{name}/bot.env script.ts` - explicit env file
 
 ```typescript
 // bots/mybot/woodcutter.ts
@@ -96,7 +105,6 @@ const result = await runScript(async (ctx) => {
   log(`Chopped ${logsChopped} logs`);
   return { logsChopped };
 }, {
-  botName: 'mybot',
   timeout: 6 * 60_000,  // Overall timeout
 });
 
@@ -119,7 +127,6 @@ Scripts receive a context object with:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `botName` | required | Which bot to use |
 | `timeout` | none | Overall timeout in ms |
 | `autoConnect` | true | Connect if not connected |
 | `disconnectAfter` | false | Disconnect when done |
@@ -148,7 +155,7 @@ This is a **persistent character** - you don't restart fresh each time. The work
 Before writing any script, check where the bot is and what it has:
 
 ```bash
-cd bots/{username} && bun --env-file=bot.env ../../sdk/cli.ts
+bun sdk/cli.ts {username}
 ```
 
 This shows: position, inventory, skills, nearby NPCs/objects, and more.
@@ -164,7 +171,7 @@ Edit `bots/{username}/script.ts` with your goal. Keep scripts focused on one tas
 ### 3. Run the Script
 
 ```bash
-cd bots/{username} && bun --env-file=bot.env script.ts
+bun bots/{username}/script.ts
 ```
 
 ### 4. Observe and Iterate
@@ -172,9 +179,8 @@ cd bots/{username} && bun --env-file=bot.env script.ts
 Watch the output. After the script finishes (or fails), check state again:
 
 ```bash
-cd bots/{username} && bun --env-file=bot.env ../../sdk/cli.ts
+bun sdk/cli.ts {username}
 ```
-
 
 Record observations in `lab_log.md`, then improve the script.
 

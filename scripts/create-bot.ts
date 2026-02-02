@@ -71,9 +71,9 @@ async function createBot(username?: string) {
     }
 
     console.log(`\n✓ Bot "${botUsername}" created successfully!`);
-    console.log(`\nTo get started:`);
-    console.log(`  cd bots/${botUsername} && bun --env-file=bot.env script.ts`);
     console.log(`\nCredentials saved in bots/${botUsername}/bot.env`);
+    console.log(`\nTo get started:`);
+    console.log(`  bun bots/${botUsername}/script.ts`);
 }
 
 // Parse command line arguments

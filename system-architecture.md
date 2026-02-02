@@ -125,7 +125,6 @@ classDiagram
     BotWorldState --> StateDelta : computed
 ```
 
-**Key insight:** `GameMessage.tick` filters stale messages. Always compare against start tick.
 
 ---
 

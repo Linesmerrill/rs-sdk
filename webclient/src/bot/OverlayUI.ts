@@ -135,9 +135,10 @@ export class OverlayUI {
             margin: 0;
             padding: 10px;
             overflow-y: auto;
-            overflow-x: auto;
+            overflow-x: hidden;
             max-height: 350px;
-            white-space: pre;
+            white-space: pre-wrap;
+            word-break: break-word;
             tab-size: 4;
             flex: 1;
         `;
@@ -171,12 +172,14 @@ export class OverlayUI {
             margin: 0;
             padding: 10px;
             overflow-y: auto;
-            overflow-x: auto;
+            overflow-x: hidden;
             max-height: 350px;
-            white-space: pre;
+            white-space: pre-wrap;
+            word-break: break-word;
             color: #FFD700;
             font-size: 10px;
             flex: 1;
+            text-align: left;
         `;
         this.actionLog.textContent = '(waiting for SDK actions...)';
 

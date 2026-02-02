@@ -1,13 +1,12 @@
 // Script Runner - Zero boilerplate script execution
-// Use standalone with botName, or pass existing bot/sdk connection
+// Auto-finds bot.env sibling to script, or from command line arg, or --env-file
 
 import { BotSDK } from './index';
 import { BotActions } from './actions';
 import { formatWorldState } from './formatter';
 import type { BotWorldState } from './types';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
+import { dirname, join, resolve } from 'path';
 
 // ============ Types ============
 
@@ -24,9 +23,7 @@ export type ScriptFunction = (ctx: ScriptContext) => Promise<any>;
 export interface RunOptions {
     /** Overall timeout in ms (default: none) */
     timeout?: number;
-    /** Bot name - required if no connection provided */
-    botName?: string;
-    /** Existing connection - use instead of botName for MCP context */
+    /** Existing connection - use instead of process.env for MCP context */
     connection?: { bot: BotActions; sdk: BotSDK };
     /** Connect if not connected (default: true) */
     autoConnect?: boolean;
@@ -61,47 +58,87 @@ interface BotConnection {
 
 const connections = new Map<string, BotConnection>();
 
-function parseEnv(content: string): Record<string, string> {
-    const result: Record<string, string> = {};
+/**
+ * Parse a bot.env file and load into process.env
+ */
+function loadEnvFile(envPath: string): void {
+    const content = readFileSync(envPath, 'utf-8');
     for (const line of content.split('\n')) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith('#')) continue;
-        const [key, ...valueParts] = trimmed.split('=');
-        if (key && valueParts.length > 0) {
-            result[key.trim()] = valueParts.join('=').trim();
+        const eqIndex = trimmed.indexOf('=');
+        if (eqIndex > 0) {
+            const key = trimmed.slice(0, eqIndex).trim();
+            const value = trimmed.slice(eqIndex + 1).trim();
+            process.env[key] = value;
         }
     }
-    return result;
 }
 
-async function getOrCreateConnection(botName: string): Promise<BotConnection> {
-    const existing = connections.get(botName);
+/**
+ * Load bot credentials automatically.
+ * Priority:
+ * 1. Already set in process.env (via --env-file)
+ * 2. bot.env sibling to the script file
+ * 3. Command line arg: bun script.ts <botname> -> bots/<botname>/bot.env
+ */
+function loadEnvFromArgs(): void {
+    // Skip if already have credentials (e.g., from --env-file)
+    if (process.env.BOT_USERNAME && process.env.PASSWORD) return;
+
+    // Try bot.env sibling to the script file
+    const scriptPath = process.argv[1];
+    if (scriptPath) {
+        const scriptDir = dirname(resolve(scriptPath));
+        const siblingEnv = join(scriptDir, 'bot.env');
+        if (existsSync(siblingEnv)) {
+            loadEnvFile(siblingEnv);
+            return;
+        }
+    }
+
+    // Try bot name from command line args
+    const args = process.argv.slice(2);
+    const botName = args.find(arg => !arg.startsWith('-'));
+
+    if (!botName) return;
+
+    const envPath = join(process.cwd(), 'bots', botName, 'bot.env');
+    if (!existsSync(envPath)) {
+        throw new Error(`Bot "${botName}" not found at ${envPath}`);
+    }
+
+    loadEnvFile(envPath);
+}
+
+async function getOrCreateConnection(): Promise<BotConnection> {
+    // Try to load from command line args first
+    loadEnvFromArgs();
+
+    // Read credentials from process.env
+    const username = process.env.BOT_USERNAME;
+    const password = process.env.PASSWORD;
+    const server = process.env.SERVER;
+
+    if (!username) {
+        throw new Error('BOT_USERNAME not set. Run with: bun --env-file=bots/{name}/bot.env script.ts\nOr: bun script.ts {botname}');
+    }
+
+    if (!password) {
+        throw new Error('PASSWORD not set. Run with: bun --env-file=bots/{name}/bot.env script.ts\nOr: bun script.ts {botname}');
+    }
+
+    const existing = connections.get(username);
     if (existing && existing.sdk.isConnected()) {
         return existing;
     }
 
-    const envPath = join(process.cwd(), 'bots', botName, 'bot.env');
-
-    if (!existsSync(envPath)) {
-        throw new Error(`Bot "${botName}" not found. Create it first with: bun scripts/create-bot.ts ${botName}`);
-    }
-
-    const envContent = await readFile(envPath, 'utf-8');
-    const env = parseEnv(envContent);
-
-    const username = env.BOT_USERNAME || botName;
-    const password = env.PASSWORD;
-
-    if (!password) {
-        throw new Error(`No password found in ${envPath}`);
-    }
-
     let gatewayUrl = 'ws://localhost:7780';
-    if (env.SERVER) {
-        gatewayUrl = `wss://${env.SERVER}/gateway`;
+    if (server) {
+        gatewayUrl = `wss://${server}/gateway`;
     }
 
-    console.error(`[Runner] Connecting to bot "${botName}"...`);
+    console.error(`[Runner] Connecting to bot "${username}"...`);
 
     const sdk = new BotSDK({
         botUsername: username,
@@ -119,10 +156,10 @@ async function getOrCreateConnection(botName: string): Promise<BotConnection> {
 
     await Promise.race([sdk.connect(), timeoutPromise]);
 
-    console.error(`[Runner] Connected to bot "${botName}"`);
+    console.error(`[Runner] Connected to bot "${username}"`);
 
     const connection: BotConnection = { sdk, bot, username };
-    connections.set(botName, connection);
+    connections.set(username, connection);
 
     return connection;
 }
@@ -132,13 +169,20 @@ async function getOrCreateConnection(botName: string): Promise<BotConnection> {
 /**
  * Run a script with zero boilerplate.
  *
+ * Credentials are loaded automatically:
+ * 1. From process.env (via bun --env-file)
+ * 2. From bot.env sibling to the script (bun bots/mybot/script.ts)
+ * 3. From command line arg (bun script.ts mybot)
+ *
  * @example
- * // Standalone - auto-connects using botName
+ * // Just run from the bot directory - auto-finds bot.env:
+ * // bun bots/mybot/script.ts
+ *
  * import { runScript } from '../../sdk/runner';
  *
  * await runScript(async (ctx) => {
  *   await ctx.bot.chopTree();
- * }, { botName: 'mybot' });
+ * });
  *
  * @example
  * // With existing connection (MCP context)
@@ -152,7 +196,6 @@ export async function runScript(
 ): Promise<RunResult> {
     const {
         timeout,
-        botName,
         connection,
         autoConnect = true,
         disconnectAfter = false,
@@ -170,17 +213,24 @@ export async function runScript(
     if (connection) {
         bot = connection.bot;
         sdk = connection.sdk;
-    } else if (botName) {
+    } else {
+        // Use process.env for credentials (loaded by bun --env-file or command line arg)
         try {
             if (autoConnect) {
-                const conn = await getOrCreateConnection(botName);
+                const conn = await getOrCreateConnection();
                 bot = conn.bot;
                 sdk = conn.sdk;
                 managedConnection = true;
             } else {
-                const existing = connections.get(botName);
+                // Try to load env from args first
+                loadEnvFromArgs();
+                const username = process.env.BOT_USERNAME;
+                if (!username) {
+                    throw new Error('BOT_USERNAME not set. Run with: bun --env-file=bots/{name}/bot.env script.ts\nOr: bun script.ts {botname}');
+                }
+                const existing = connections.get(username);
                 if (!existing || !existing.sdk.isConnected()) {
-                    throw new Error(`Bot "${botName}" is not connected and autoConnect is false`);
+                    throw new Error(`Bot "${username}" is not connected and autoConnect is false`);
                 }
                 bot = existing.bot;
                 sdk = existing.sdk;
@@ -195,14 +245,6 @@ export async function runScript(
                 finalState: null
             };
         }
-    } else {
-        return {
-            success: false,
-            error: new Error('Either botName or connection is required'),
-            duration: Date.now() - startTime,
-            logs,
-            finalState: null
-        };
     }
 
     // Create captured console functions
@@ -295,10 +337,13 @@ export async function runScript(
     }
 
     // Disconnect if requested (only for managed connections)
-    if (disconnectAfter && managedConnection && botName) {
-        console.error(`[Runner] Disconnecting bot "${botName}"...`);
-        await sdk.disconnect();
-        connections.delete(botName);
+    if (disconnectAfter && managedConnection) {
+        const username = process.env.BOT_USERNAME;
+        if (username) {
+            console.error(`[Runner] Disconnecting bot "${username}"...`);
+            await sdk.disconnect();
+            connections.delete(username);
+        }
     }
 
     return {

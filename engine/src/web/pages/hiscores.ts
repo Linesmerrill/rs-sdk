@@ -26,7 +26,7 @@ const HISCORES_STYLES = `
 
 // Player profile page handler
 export async function handleHiscoresPlayerPage(url: URL): Promise<Response | null> {
-    const match = url.pathname.match(/^\/hiscores\/player\/([^/]+)\/?$/);
+    const match = url.pathname.match(/^\/hi(?:gh)?scores\/player\/([^/]+)\/?$/);
     if (!match) {
         return null;
     }
@@ -216,7 +216,7 @@ export async function handleHiscoresPlayerPage(url: URL): Promise<Response | nul
 }
 
 export async function handleHiscoresPage(url: URL): Promise<Response | null> {
-    if (url.pathname !== '/hiscores' && url.pathname !== '/hiscores/') {
+    if (!/^\/hi(?:gh)?scores\/?$/.test(url.pathname)) {
         return null;
     }
 

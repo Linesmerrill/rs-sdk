@@ -73,7 +73,7 @@ export class BotSDK {
             freshDataThreshold: config.freshDataThreshold ?? 3000,
             browserLaunchUrl: config.browserLaunchUrl || '',
             browserLaunchTimeout: config.browserLaunchTimeout || 10000,
-            actionTimeout: config.actionTimeout || 30000,
+            actionTimeout: config.actionTimeout || 60000,
             autoReconnect: config.autoReconnect ?? true,
             reconnectMaxRetries: config.reconnectMaxRetries ?? Infinity,
             reconnectBaseDelay: config.reconnectBaseDelay ?? 1000,

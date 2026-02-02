@@ -73,7 +73,8 @@ class BotManager {
       password: pwd,
       gatewayUrl: gateway,
       connectionMode: 'control',
-      autoReconnect: false  // Don't auto-reconnect in MCP - let user manage connections
+      autoReconnect: true,       // Enable auto-reconnect for connection stability
+      autoLaunchBrowser: 'auto', // Auto-launch browser if session is stale
     });
 
     const bot = new BotActions(sdk);
@@ -89,6 +90,17 @@ class BotManager {
       username,
       connected: true
     };
+
+    // Track connection state changes
+    sdk.onConnectionStateChange((state) => {
+      const wasConnected = connection.connected;
+      connection.connected = state === 'connected';
+      if (wasConnected && !connection.connected) {
+        console.error(`[MCP] Bot "${name}" connection lost (${state}), will auto-reconnect...`);
+      } else if (!wasConnected && connection.connected) {
+        console.error(`[MCP] Bot "${name}" reconnected!`);
+      }
+    });
 
     this.connections.set(name, connection);
     return connection;
