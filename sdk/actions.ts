@@ -3,15 +3,14 @@
 // Actions resolve when the EFFECT is complete (not just acknowledged)
 
 import { BotSDK } from './index';
+import { ActionHelpers } from './actions-helpers';
 import type {
-    BotWorldState,
     ActionResult,
     SkillState,
     InventoryItem,
     NearbyNpc,
     NearbyLoc,
     GroundItem,
-    DialogState,
     ShopItem,
     ChopTreeResult,
     BurnLogsResult,
@@ -35,81 +34,10 @@ import type {
 } from './types';
 
 export class BotActions {
-    constructor(private sdk: BotSDK) {}
+    private helpers: ActionHelpers;
 
-    // ============ Private Helpers ============
-
-    private async waitForMovementComplete(
-        targetX: number,
-        targetZ: number,
-        tolerance: number = 3
-    ): Promise<{ arrived: boolean; stoppedMoving: boolean; x: number; z: number }> {
-        const POLL_INTERVAL = 150;
-        const STUCK_THRESHOLD = 600;
-        const MIN_TIMEOUT = 2000;
-        const TILES_PER_SECOND = 4.5;
-
-        const startState = this.sdk.getState();
-        if (!startState?.player) {
-            return { arrived: false, stoppedMoving: true, x: 0, z: 0 };
-        }
-
-        const startX = startState.player.worldX;
-        const startZ = startState.player.worldZ;
-
-        const distance = Math.sqrt(
-            Math.pow(targetX - startX, 2) + Math.pow(targetZ - startZ, 2)
-        );
-        const expectedTime = (distance / TILES_PER_SECOND) * 1000;
-        const maxTimeout = Math.max(MIN_TIMEOUT, expectedTime * 1.5);
-
-        let lastX = startX;
-        let lastZ = startZ;
-        let lastMoveTime = Date.now();
-        const startTime = Date.now();
-
-        while (Date.now() - startTime < maxTimeout) {
-            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
-
-            const state = this.sdk.getState();
-            if (!state?.player) {
-                return { arrived: false, stoppedMoving: true, x: lastX, z: lastZ };
-            }
-
-            const currentX = state.player.worldX;
-            const currentZ = state.player.worldZ;
-
-            const distToTarget = Math.sqrt(
-                Math.pow(targetX - currentX, 2) + Math.pow(targetZ - currentZ, 2)
-            );
-            if (distToTarget <= tolerance) {
-                return { arrived: true, stoppedMoving: false, x: currentX, z: currentZ };
-            }
-
-            if (currentX !== lastX || currentZ !== lastZ) {
-                lastMoveTime = Date.now();
-                lastX = currentX;
-                lastZ = currentZ;
-            } else {
-                if (Date.now() - lastMoveTime > STUCK_THRESHOLD) {
-                    return { arrived: false, stoppedMoving: true, x: currentX, z: currentZ };
-                }
-            }
-        }
-
-        const finalState = this.sdk.getState();
-        const finalX = finalState?.player?.worldX ?? lastX;
-        const finalZ = finalState?.player?.worldZ ?? lastZ;
-        const finalDist = Math.sqrt(
-            Math.pow(targetX - finalX, 2) + Math.pow(targetZ - finalZ, 2)
-        );
-
-        return {
-            arrived: finalDist <= tolerance,
-            stoppedMoving: true,
-            x: finalX,
-            z: finalZ
-        };
+    constructor(private sdk: BotSDK) {
+        this.helpers = new ActionHelpers(sdk);
     }
 
     // ============ Porcelain: UI Helpers ============
@@ -261,7 +189,7 @@ export class BotActions {
     // ============ Porcelain: Smart Actions ============
 
     async openDoor(target?: NearbyLoc | string | RegExp): Promise<OpenDoorResult> {
-        const door = this.resolveLocation(target, /door|gate/i);
+        const door = this.helpers.resolveLocation(target, /door|gate/i);
         if (!door) {
             return { success: false, message: 'No door found nearby', reason: 'door_not_found' };
         }
@@ -330,18 +258,11 @@ export class BotActions {
                 return hasClose && !hasOpen;
             }, 5000);
 
-            const finalState = this.sdk.getState();
-
-            for (const msg of finalState?.gameMessages ?? []) {
-                if (msg.tick > startTick) {
-                    const text = msg.text.toLowerCase();
-                    if (text.includes("can't reach") || text.includes("cannot reach")) {
-                        return { success: false, message: `Cannot reach ${door.name} - still blocked`, reason: 'open_failed', door };
-                    }
-                }
+            if (this.helpers.checkCantReachMessage(startTick)) {
+                return { success: false, message: `Cannot reach ${door.name} - still blocked`, reason: 'open_failed', door };
             }
 
-            const doorAfter = finalState?.nearbyLocs.find(l =>
+            const doorAfter = this.sdk.getState()?.nearbyLocs.find(l =>
                 l.x === doorX && l.z === doorZ && /door|gate/i.test(l.name)
             );
 
@@ -364,7 +285,7 @@ export class BotActions {
     async chopTree(target?: NearbyLoc | string | RegExp): Promise<ChopTreeResult> {
         await this.dismissBlockingUI();
 
-        const tree = this.resolveLocation(target, /^tree$/i);
+        const tree = this.helpers.resolveLocation(target, /^tree$/i);
         if (!tree) {
             return { success: false, message: 'No tree found' };
         }
@@ -400,7 +321,7 @@ export class BotActions {
             return { success: false, xpGained: 0, message: 'No tinderbox in inventory' };
         }
 
-        const logs = this.resolveInventoryItem(logsTarget, /logs/i);
+        const logs = this.helpers.resolveInventoryItem(logsTarget, /logs/i);
         if (!logs) {
             return { success: false, xpGained: 0, message: 'No logs in inventory' };
         }
@@ -454,21 +375,30 @@ export class BotActions {
     }
 
     async pickupItem(target: GroundItem | string | RegExp): Promise<PickupResult> {
-        const item = this.resolveGroundItem(target);
+        return this.helpers.withDoorRetry(
+            () => this._pickupItemOnce(target),
+            (r) => r.reason === 'cant_reach' || r.reason === 'timeout'
+        );
+    }
+
+    private async _pickupItemOnce(target: GroundItem | string | RegExp): Promise<PickupResult> {
+        const item = this.helpers.resolveGroundItem(target);
         if (!item) {
             return { success: false, message: 'Item not found on ground', reason: 'item_not_found' };
         }
 
         const invCountBefore = this.sdk.getInventory().length;
         const startTick = this.sdk.getState()?.tick || 0;
-        const result = await this.sdk.sendPickup(item.x, item.z, item.id);
 
+        // Send pickup directly - game client handles walk-to-interact via MOVE_OPCLICK
+        const result = await this.sdk.sendPickup(item.x, item.z, item.id);
         if (!result.success) {
             return { success: false, message: result.message };
         }
 
         try {
             const finalState = await this.sdk.waitForCondition(state => {
+                // Check for failure messages
                 for (const msg of state.gameMessages) {
                     if (msg.tick > startTick) {
                         const text = msg.text.toLowerCase();
@@ -483,11 +413,12 @@ export class BotActions {
                 return state.inventory.length > invCountBefore;
             }, 10000);
 
+            // Check for failure reasons
             for (const msg of finalState.gameMessages) {
                 if (msg.tick > startTick) {
                     const text = msg.text.toLowerCase();
                     if (text.includes("can't reach") || text.includes("cannot reach")) {
-                        return { success: false, message: `Cannot reach ${item.name} at (${item.x}, ${item.z}) - path blocked`, reason: 'cant_reach' };
+                        return { success: false, message: `Cannot reach ${item.name} - path blocked`, reason: 'cant_reach' };
                     }
                     if (text.includes("inventory") && text.includes("full")) {
                         return { success: false, message: 'Inventory is full', reason: 'inventory_full' };
@@ -503,19 +434,55 @@ export class BotActions {
     }
 
     async talkTo(target: NearbyNpc | string | RegExp): Promise<TalkResult> {
-        const npc = this.resolveNpc(target);
+        return this.helpers.withDoorRetry(
+            () => this._talkToOnce(target),
+            (r) => !r.success && (r.message?.includes("can't reach") || r.message?.includes('Timed out'))
+        );
+    }
+
+    private async _talkToOnce(target: NearbyNpc | string | RegExp): Promise<TalkResult> {
+        const npc = this.helpers.resolveNpc(target);
         if (!npc) {
             return { success: false, message: 'NPC not found' };
         }
 
+        const startTick = this.sdk.getState()?.tick || 0;
+
+        // Send talk directly - game client handles walk-to-interact via MOVE_OPCLICK
         const result = await this.sdk.sendTalkToNpc(npc.index);
         if (!result.success) {
             return { success: false, message: result.message };
         }
 
         try {
-            const state = await this.sdk.waitForCondition(s => s.dialog.isOpen, 10000);
-            return { success: true, dialog: state.dialog, message: `Talking to ${npc.name}` };
+            const finalState = await this.sdk.waitForCondition(state => {
+                // Check for "can't reach" messages
+                for (const msg of state.gameMessages) {
+                    if (msg.tick > startTick) {
+                        const text = msg.text.toLowerCase();
+                        if (text.includes("can't reach") || text.includes("cannot reach")) {
+                            return true;
+                        }
+                    }
+                }
+                return state.dialog.isOpen;
+            }, 10000);
+
+            // Check if we got a "can't reach" message
+            for (const msg of finalState.gameMessages) {
+                if (msg.tick > startTick) {
+                    const text = msg.text.toLowerCase();
+                    if (text.includes("can't reach") || text.includes("cannot reach")) {
+                        return { success: false, message: `Cannot reach ${npc.name} - can't reach obstacle` };
+                    }
+                }
+            }
+
+            if (finalState.dialog.isOpen) {
+                return { success: true, dialog: finalState.dialog, message: `Talking to ${npc.name}` };
+            }
+
+            return { success: false, message: 'Dialog did not open' };
         } catch {
             return { success: false, message: 'Timed out waiting for dialog' };
         }
@@ -528,14 +495,18 @@ export class BotActions {
         const distanceTo = (p: { worldX: number; worldZ: number } | undefined) =>
             p ? Math.sqrt(Math.pow(x - p.worldX, 2) + Math.pow(z - p.worldZ, 2)) : Infinity;
 
-        if (distanceTo(state.player) <= tolerance) {
+        const startDist = distanceTo(state.player);
+
+        if (startDist <= tolerance) {
             return { success: true, message: 'Already at destination' };
         }
 
         // With 512x512 search grid, paths can cover ~256 tiles per query
         // For longer walks, we re-query after completing each path segment
         const MAX_QUERIES = 25;
+        const MAX_DOOR_RETRIES = 3;
         let stuckCount = 0;
+        let doorRetryCount = 0;
         let lastQueryX = state.player.worldX;
         let lastQueryZ = state.player.worldZ;
 
@@ -548,14 +519,47 @@ export class BotActions {
                 return { success: true, message: `Arrived at (${current.worldX}, ${current.worldZ})` };
             }
 
-            const path = await this.sdk.sendFindPath(x, z, 500);
+            let path = await this.sdk.sendFindPath(x, z, 500);
             if (!path.success || !path.waypoints?.length) {
-                // No path - might be blocked, try one more query after a tick
+                // If destination zone not allocated, walk directly toward it
+                // This lets us approach gates/doors leading to unexplored areas
+                if (path.error?.includes('Destination zone not allocated') || path.error?.includes('Zone not allocated')) {
+                    await this.sdk.sendWalk(x, z, true);
+                    const moveResult = await this.helpers.waitForMovementComplete(x, z, tolerance);
+                    if (moveResult.arrived) {
+                        return { success: true, message: `Arrived via direct walk at (${moveResult.x}, ${moveResult.z})` };
+                    }
+                    // Check if we made progress
+                    const movedDist = Math.sqrt(
+                        Math.pow(moveResult.x - current.worldX, 2) + Math.pow(moveResult.z - current.worldZ, 2)
+                    );
+
+                    // If we didn't make progress, try opening a nearby door
+                    if (movedDist < 2 && moveResult.stoppedMoving) {
+                        if (doorRetryCount < MAX_DOOR_RETRIES) {
+                            const doorOpened = await this.helpers.tryOpenBlockingDoor();
+                            if (doorOpened) {
+                                doorRetryCount++;
+                                continue;
+                            }
+                        }
+                        // No door to open or max retries reached
+                        stuckCount++;
+                        if (stuckCount >= 3) {
+                            return { success: false, message: `Stuck at (${moveResult.x}, ${moveResult.z}) - destination zone not in collision data` };
+                        }
+                    }
+                    continue;
+                }
+
+                // Regular pathfinding failure - retry after a tick
                 await this.sdk.waitForTicks(1);
                 const retryPath = await this.sdk.sendFindPath(x, z, 500);
                 if (!retryPath.success || !retryPath.waypoints?.length) {
                     return { success: false, message: `No path to (${x}, ${z}) from (${current.worldX}, ${current.worldZ})` };
                 }
+                // Use the successful retry path
+                path = retryPath;
             }
 
             const waypoints = path.waypoints!;
@@ -571,7 +575,7 @@ export class BotActions {
                 await this.sdk.sendWalk(wp.x, wp.z, true);
 
                 // Wait for movement, but don't wait too long per waypoint
-                const moveResult = await this.waitForMovementComplete(wp.x, wp.z, 2);
+                const moveResult = await this.helpers.waitForMovementComplete(wp.x, wp.z, 2);
 
                 const pos = this.sdk.getState()?.player;
                 if (!pos) return { success: false, message: 'Lost player state' };
@@ -589,7 +593,17 @@ export class BotActions {
                 if (moved < 1 && moveResult.stoppedMoving) {
                     noProgressCount++;
                     if (noProgressCount >= 3) {
-                        // Stuck on this path, break to re-query
+                        // Stuck on this path - try opening a nearby door
+                        if (doorRetryCount < MAX_DOOR_RETRIES) {
+                            const doorOpened = await this.helpers.tryOpenBlockingDoor();
+                            if (doorOpened) {
+                                doorRetryCount++;
+                                noProgressCount = 0;
+                                await this.sdk.waitForTicks(1);
+                                break; // Re-query path after opening door
+                            }
+                        }
+                        // Couldn't open door, break to re-query anyway
                         break;
                     }
                 } else {
@@ -621,6 +635,16 @@ export class BotActions {
             if (distMoved < 5) {
                 stuckCount++;
                 if (stuckCount >= 3) {
+                    // Try opening a nearby door before giving up
+                    if (doorRetryCount < MAX_DOOR_RETRIES) {
+                        const doorOpened = await this.helpers.tryOpenBlockingDoor();
+                        if (doorOpened) {
+                            doorRetryCount++;
+                            stuckCount = 0; // Reset stuck counter after opening door
+                            await this.sdk.waitForTicks(1);
+                            continue; // Retry walking
+                        }
+                    }
                     return { success: false, message: `Stuck at (${after.worldX}, ${after.worldZ})` };
                 }
             } else {
@@ -667,7 +691,7 @@ export class BotActions {
     }
 
     async openShop(target: NearbyNpc | string | RegExp = /shop\s*keeper/i): Promise<ActionResult> {
-        const npc = this.resolveNpc(target);
+        const npc = this.helpers.resolveNpc(target);
         if (!npc) {
             return { success: false, message: 'Shopkeeper not found' };
         }
@@ -677,14 +701,30 @@ export class BotActions {
             return { success: false, message: 'No trade option on NPC' };
         }
 
+        // Walk near NPC first - this handles doors
+        if (npc.distance > 2) {
+            const walkResult = await this.walkTo(npc.x, npc.z, 2);
+            if (!walkResult.success) {
+                return { success: false, message: `Cannot reach ${npc.name}: ${walkResult.message}` };
+            }
+        }
+
         const result = await this.sdk.sendInteractNpc(npc.index, tradeOpt.opIndex);
         if (!result.success) {
             return result;
         }
 
         try {
-            await this.sdk.waitForCondition(state => state.shop.isOpen, 10000);
-            return { success: true, message: `Opened shop: ${this.sdk.getState()?.shop.title}` };
+            const finalState = await this.sdk.waitForCondition(state => {
+                if (state.shop.isOpen) return true;
+                return false;
+            }, 10000);
+
+            if (finalState.shop.isOpen) {
+                return { success: true, message: `Opened shop: ${this.sdk.getState()?.shop.title}` };
+            }
+
+            return { success: false, message: 'Shop did not open' };
         } catch {
             return { success: false, message: 'Timed out waiting for shop to open' };
         }
@@ -696,7 +736,7 @@ export class BotActions {
             return { success: false, message: 'Shop is not open' };
         }
 
-        const shopItem = this.resolveShopItem(target, shop.shopItems);
+        const shopItem = this.helpers.resolveShopItem(target, shop.shopItems);
         if (!shopItem) {
             return { success: false, message: `Item not found in shop: ${target}` };
         }
@@ -730,7 +770,7 @@ export class BotActions {
             return { success: false, message: 'Shop is not open' };
         }
 
-        const sellItem = this.resolveShopItem(target, shop.playerItems);
+        const sellItem = this.helpers.resolveShopItem(target, shop.playerItems);
         if (!sellItem) {
             return { success: false, message: `Item not found to sell: ${target}` };
         }
@@ -889,21 +929,38 @@ export class BotActions {
         const banker = this.sdk.findNearbyNpc(/banker/i);
         const bankBooth = this.sdk.findNearbyLoc(/bank booth|bank chest/i);
 
+        if (!banker && !bankBooth) {
+            return { success: false, message: 'No banker NPC or bank booth found nearby', reason: 'no_bank_found' };
+        }
+
+        // Walk near the bank target first - this handles doors
+        const target = banker || bankBooth!;
+        if (target.distance > 2) {
+            const walkResult = await this.walkTo(target.x, target.z, 2);
+            if (!walkResult.success) {
+                return { success: false, message: `Cannot reach bank: ${walkResult.message}`, reason: 'cant_reach' };
+            }
+        }
+
+        // Re-find targets after walking (they may have changed)
+        const bankerNow = this.sdk.findNearbyNpc(/banker/i);
+        const bankBoothNow = this.sdk.findNearbyLoc(/bank booth|bank chest/i);
+
         let interactSuccess = false;
 
-        if (banker) {
-            const bankOpt = banker.optionsWithIndex.find(o => /^bank$/i.test(o.text));
+        if (bankerNow) {
+            const bankOpt = bankerNow.optionsWithIndex.find(o => /^bank$/i.test(o.text));
             if (bankOpt) {
-                await this.sdk.sendInteractNpc(banker.index, bankOpt.opIndex);
+                await this.sdk.sendInteractNpc(bankerNow.index, bankOpt.opIndex);
                 interactSuccess = true;
             }
         }
 
-        if (!interactSuccess && bankBooth) {
-            const bankOpt = bankBooth.optionsWithIndex.find(o => /^bank$/i.test(o.text)) ||
-                           bankBooth.optionsWithIndex.find(o => /use/i.test(o.text));
+        if (!interactSuccess && bankBoothNow) {
+            const bankOpt = bankBoothNow.optionsWithIndex.find(o => /^bank$/i.test(o.text)) ||
+                           bankBoothNow.optionsWithIndex.find(o => /use/i.test(o.text));
             if (bankOpt) {
-                await this.sdk.sendInteractLoc(bankBooth.x, bankBooth.z, bankBooth.id, bankOpt.opIndex);
+                await this.sdk.sendInteractLoc(bankBoothNow.x, bankBoothNow.z, bankBoothNow.id, bankOpt.opIndex);
                 interactSuccess = true;
             }
         }
@@ -916,10 +973,10 @@ export class BotActions {
 
         while (Date.now() - startTime < timeout) {
             try {
-                await this.sdk.waitForCondition(s =>
-                    s.interface?.isOpen === true || s.dialog?.isOpen === true,
-                    Math.min(2000, timeout - (Date.now() - startTime))
-                );
+                const finalState = await this.sdk.waitForCondition(s => {
+                    if (s.interface?.isOpen === true || s.dialog?.isOpen === true) return true;
+                    return false;
+                }, Math.min(2000, timeout - (Date.now() - startTime)));
 
                 const currentState = this.sdk.getState();
 
@@ -976,7 +1033,7 @@ export class BotActions {
             return { success: false, message: 'Bank is not open', reason: 'bank_not_open' };
         }
 
-        const item = this.resolveInventoryItem(target, /./);
+        const item = this.helpers.resolveInventoryItem(target, /./);
         if (!item) {
             return { success: false, message: `Item not found in inventory: ${target}`, reason: 'item_not_found' };
         }
@@ -1035,7 +1092,7 @@ export class BotActions {
     // ============ Porcelain: Equipment & Combat ============
 
     async equipItem(target: InventoryItem | string | RegExp): Promise<EquipResult> {
-        const item = this.resolveInventoryItem(target, /./);
+        const item = this.helpers.resolveInventoryItem(target, /./);
         if (!item) {
             return { success: false, message: `Item not found: ${target}` };
         }
@@ -1102,7 +1159,7 @@ export class BotActions {
     }
 
     async eatFood(target: InventoryItem | string | RegExp): Promise<EatResult> {
-        const food = this.resolveInventoryItem(target, /./);
+        const food = this.helpers.resolveInventoryItem(target, /./);
         if (!food) {
             return { success: false, hpGained: 0, message: `Food not found: ${target}` };
         }
@@ -1135,14 +1192,36 @@ export class BotActions {
     }
 
     async attackNpc(target: NearbyNpc | string | RegExp, timeout: number = 5000): Promise<AttackResult> {
-        const npc = this.resolveNpc(target);
+        const npc = this.helpers.resolveNpc(target);
         if (!npc) {
             return { success: false, message: `NPC not found: ${target}`, reason: 'npc_not_found' };
+        }
+
+        // Sanity check: NPC coordinates should be within reasonable distance of player
+        // If coords are wildly off, the NPC data is corrupted
+        const state = this.sdk.getState();
+        if (state?.player) {
+            const coordDist = Math.sqrt(
+                Math.pow(npc.x - state.player.worldX, 2) + Math.pow(npc.z - state.player.worldZ, 2)
+            );
+            // If calculated coord distance is way more than reported distance, coords are bad
+            // Allow tolerance of 5 tiles for small distances (handles distance=0 edge case)
+            if (coordDist > 200 || (npc.distance > 0 && npc.distance < 50 && coordDist > Math.max(5, npc.distance * 3))) {
+                return { success: false, message: `NPC "${npc.name}" has invalid coordinates`, reason: 'npc_not_found' };
+            }
         }
 
         const attackOpt = npc.optionsWithIndex.find(o => /attack/i.test(o.text));
         if (!attackOpt) {
             return { success: false, message: `No attack option on ${npc.name}`, reason: 'no_attack_option' };
+        }
+
+        // Walk near NPC first - this handles doors
+        if (npc.distance > 2) {
+            const walkResult = await this.walkTo(npc.x, npc.z, 2);
+            if (!walkResult.success) {
+                return { success: false, message: `Cannot reach ${npc.name}: ${walkResult.message}`, reason: 'out_of_reach' };
+            }
         }
 
         const startTick = this.sdk.getState()?.tick || 0;
@@ -1156,9 +1235,6 @@ export class BotActions {
                 for (const msg of state.gameMessages) {
                     if (msg.tick > startTick) {
                         const text = msg.text.toLowerCase();
-                        if (text.includes("can't reach") || text.includes("cannot reach")) {
-                            return true;
-                        }
                         if (text.includes("someone else is fighting") || text.includes("already under attack")) {
                             return true;
                         }
@@ -1177,12 +1253,10 @@ export class BotActions {
                 return false;
             }, timeout);
 
+            // Check for "already in combat"
             for (const msg of finalState.gameMessages) {
                 if (msg.tick > startTick) {
                     const text = msg.text.toLowerCase();
-                    if (text.includes("can't reach") || text.includes("cannot reach")) {
-                        return { success: false, message: `Cannot reach ${npc.name} - obstacle in the way`, reason: 'out_of_reach' };
-                    }
                     if (text.includes("someone else is fighting") || text.includes("already under attack")) {
                         return { success: false, message: `${npc.name} is already in combat`, reason: 'already_in_combat' };
                     }
@@ -1196,7 +1270,7 @@ export class BotActions {
     }
 
     async castSpellOnNpc(target: NearbyNpc | string | RegExp, spellComponent: number, timeout: number = 3000): Promise<CastSpellResult> {
-        const npc = this.resolveNpc(target);
+        const npc = this.helpers.resolveNpc(target);
         if (!npc) {
             return { success: false, message: `NPC not found: ${target}`, reason: 'npc_not_found' };
         }
@@ -1235,16 +1309,18 @@ export class BotActions {
                 return false;
             }, timeout);
 
+            // Check for "not enough runes" first
             for (const msg of finalState.gameMessages) {
                 if (msg.tick > startTick) {
                     const text = msg.text.toLowerCase();
-                    if (text.includes("can't reach") || text.includes("cannot reach")) {
-                        return { success: false, message: `Cannot reach ${npc.name} - obstacle in the way`, reason: 'out_of_reach' };
-                    }
                     if (text.includes("do not have enough") || text.includes("don't have enough")) {
                         return { success: false, message: `Not enough runes to cast spell`, reason: 'no_runes' };
                     }
                 }
+            }
+
+            if (this.helpers.checkCantReachMessage(startTick)) {
+                return { success: false, message: `Cannot reach ${npc.name} - obstacle in the way`, reason: 'out_of_reach' };
             }
 
             const finalMagicXp = finalState.skills.find(s => s.name === 'Magic')?.experience ?? 0;
@@ -1898,59 +1974,6 @@ export class BotActions {
         }
 
         return { success: false, message: 'Smithing timed out', reason: 'timeout' };
-    }
-
-    // ============ Resolution Helpers ============
-
-    private resolveLocation(
-        target: NearbyLoc | string | RegExp | undefined,
-        defaultPattern: RegExp
-    ): NearbyLoc | null {
-        if (!target) {
-            return this.sdk.findNearbyLoc(defaultPattern);
-        }
-        if (typeof target === 'object' && 'x' in target) {
-            return target;
-        }
-        return this.sdk.findNearbyLoc(target);
-    }
-
-    private resolveInventoryItem(
-        target: InventoryItem | string | RegExp | undefined,
-        defaultPattern: RegExp
-    ): InventoryItem | null {
-        if (!target) {
-            return this.sdk.findInventoryItem(defaultPattern);
-        }
-        if (typeof target === 'object' && 'slot' in target) {
-            return target;
-        }
-        return this.sdk.findInventoryItem(target);
-    }
-
-    private resolveGroundItem(target: GroundItem | string | RegExp): GroundItem | null {
-        if (typeof target === 'object' && 'x' in target) {
-            return target;
-        }
-        return this.sdk.findGroundItem(target);
-    }
-
-    private resolveNpc(target: NearbyNpc | string | RegExp): NearbyNpc | null {
-        if (typeof target === 'object' && 'index' in target) {
-            return target;
-        }
-        return this.sdk.findNearbyNpc(target);
-    }
-
-    private resolveShopItem(
-        target: ShopItem | InventoryItem | string | RegExp,
-        items: ShopItem[]
-    ): ShopItem | null {
-        if (typeof target === 'object' && 'id' in target && 'name' in target) {
-            return items.find(i => i.id === target.id) ?? null;
-        }
-        const regex = typeof target === 'string' ? new RegExp(target, 'i') : target;
-        return items.find(i => regex.test(i.name)) ?? null;
     }
 }
 

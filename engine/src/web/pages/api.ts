@@ -33,16 +33,10 @@ export function handleExportCollisionApi(url: URL): Response | null {
     try {
         console.log('Exporting collision data...');
 
-        // Flag bits to check
+        // Flag bits to export (excluding WALL_* flags)
+        // Wall flags are excluded so the pathfinder routes through doorways.
+        // The server enforces actual collision - doors just need to be opened at runtime.
         const FLAG_BITS = [
-            CollisionFlag.WALL_NORTH_WEST,
-            CollisionFlag.WALL_NORTH,
-            CollisionFlag.WALL_NORTH_EAST,
-            CollisionFlag.WALL_EAST,
-            CollisionFlag.WALL_SOUTH_EAST,
-            CollisionFlag.WALL_SOUTH,
-            CollisionFlag.WALL_SOUTH_WEST,
-            CollisionFlag.WALL_WEST,
             CollisionFlag.LOC,
             CollisionFlag.FLOOR,
             CollisionFlag.ROOF,
@@ -54,6 +48,8 @@ export function handleExportCollisionApi(url: URL): Response | null {
         const LEVELS = 4;
 
         const tiles: Array<[number, number, number, number]> = [];
+        // Track all allocated zones so SDK can allocate them even if they have no collision tiles
+        const zones: Array<[number, number, number]> = [];
 
         for (let level = 0; level < LEVELS; level++) {
             for (let mx = MIN_MX; mx <= MAX_MX; mx++) {
@@ -69,6 +65,9 @@ export function handleExportCollisionApi(url: URL): Response | null {
                             if (!rsmod.isZoneAllocated(zoneBaseX, zoneBaseZ, level)) {
                                 continue;
                             }
+
+                            // Record this zone as allocated
+                            zones.push([level, zoneBaseX, zoneBaseZ]);
 
                             for (let dx = 0; dx < 8; dx++) {
                                 for (let dz = 0; dz < 8; dz++) {
@@ -93,9 +92,9 @@ export function handleExportCollisionApi(url: URL): Response | null {
             }
         }
 
-        console.log(`Exported ${tiles.length} tiles with collision`);
+        console.log(`Exported ${tiles.length} tiles with collision, ${zones.length} zones allocated`);
 
-        return new Response(JSON.stringify({ version: 1, tiles }), {
+        return new Response(JSON.stringify({ tiles, zones }), {
             headers: { 'Content-Type': 'application/json' }
         });
     } catch (e: any) {

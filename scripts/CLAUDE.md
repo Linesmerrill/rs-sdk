@@ -29,7 +29,7 @@ Hypothesize → Implement → Run → Observe → Record in lab_log → Improve 
 3. **Run** - Execute with automatic instrumentation
 4. **Analyze** - Review events.jsonl, screenshots, state snapshots
 5. **Document** - Record insights in lab_log.md
-6. **Improve** - Fix issues, optimize approach
+6. **Improve** - Fix issues, optimize approach, refine logic to remove un-needed code
 7. **Repeat**
 
 ## Autonomous Testing

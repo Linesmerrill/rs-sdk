@@ -856,12 +856,22 @@ export class BotSDK {
 
         const { worldX: srcX, worldZ: srcZ, level } = state.player;
 
-        // Check if zones are allocated
-        if (!pathfinding.isZoneAllocated(level, srcX, srcZ) || !pathfinding.isZoneAllocated(level, destX, destZ)) {
-            return { success: false, waypoints: [], error: 'Zone not allocated (no collision data)' };
+        // Only require source zone to be allocated - we need to know where we ARE
+        // Destination zone may be unallocated (e.g., past a gate we haven't opened yet)
+        // The pathfinder will find a partial path to the edge of known areas
+        if (!pathfinding.isZoneAllocated(level, srcX, srcZ)) {
+            return { success: false, waypoints: [], error: 'Source zone not allocated (no collision data for current position)' };
         }
 
+        const destZoneAllocated = pathfinding.isZoneAllocated(level, destX, destZ);
         const waypoints = pathfinding.findLongPath(level, srcX, srcZ, destX, destZ, maxWaypoints);
+
+        // If no waypoints and destination zone isn't allocated, that's expected -
+        // we just can't path there yet (might need to open a door first)
+        if (waypoints.length === 0 && !destZoneAllocated) {
+            // Return success with empty waypoints - caller should try raw walking toward destination
+            return { success: true, waypoints: [], reachedDestination: false, error: 'Destination zone not allocated - try walking toward it' };
+        }
         const lastWaypoint = waypoints[waypoints.length - 1];
         const reachedDestination = lastWaypoint !== undefined &&
             lastWaypoint.x === destX &&
@@ -900,7 +910,7 @@ export class BotSDK {
 
         try {
             const state = await this.waitForCondition(s => {
-                const validPosition = s.player && s.player.worldX !== 0 && s.player.worldZ !== 0;
+                const validPosition = !!(s.player && s.player.worldX !== 0 && s.player.worldZ !== 0);
                 const inGame = s.inGame;
                 const hasEntities = s.nearbyNpcs.length > 0 || s.nearbyLocs.length > 0 || s.groundItems.length > 0;
 

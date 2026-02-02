@@ -440,6 +440,9 @@ export class BotStateCollector implements ScanProvider {
         const npcArray = c.npcs || [];
         const npcIds = c.npcIds || [];
         const npcCount = c.npcCount || 0;
+        // Scene base coordinates for converting local coords to world coords
+        const baseX = c.sceneBaseTileX || 0;
+        const baseZ = c.sceneBaseTileZ || 0;
 
         for (let i = 0; i < npcCount; i++) {
             const npcIndex = npcIds[i];
@@ -447,9 +450,18 @@ export class BotStateCollector implements ScanProvider {
 
             if (!npc || !npc.type) continue;
 
+            // Validate NPC coordinates are within scene bounds (0 to 104*128 = 13,312)
+            // NPCs with invalid coords are likely despawning or in a bad state
+            const maxLocalCoord = 104 * 128;
+            const npcX = npc.x || 0;
+            const npcZ = npc.z || 0;
+            if (npcX < 0 || npcX > maxLocalCoord || npcZ < 0 || npcZ > maxLocalCoord) {
+                continue; // Skip NPCs with invalid coordinates
+            }
+
             const npcType = npc.type as NpcType;
-            const dx = (npc.x || 0) - (player.x || 0);
-            const dz = (npc.z || 0) - (player.z || 0);
+            const dx = npcX - (player.x || 0);
+            const dz = npcZ - (player.z || 0);
             const distance = Math.max(Math.abs(dx), Math.abs(dz)) >> 7;
 
             const optionsWithIndex: NpcOption[] = [];
@@ -473,12 +485,16 @@ export class BotStateCollector implements ScanProvider {
             // NPC is in combat if it has a target OR was hit recently (within 400 ticks)
             const inCombat = targetId !== -1 || combatCycle > loopCycle;
 
+            // Convert fine-grained local coords (128 units/tile) to world coordinates
+            const npcWorldX = baseX + (npcX >> 7);
+            const npcWorldZ = baseZ + (npcZ >> 7);
+
             npcs.push({
                 index: npcIndex,
                 name: npcType.name || 'Unknown',
                 combatLevel: npcType.vislevel || 0,
-                x: npc.x || 0,
-                z: npc.z || 0,
+                x: npcWorldX,
+                z: npcWorldZ,
                 distance,
                 hp,
                 maxHp,
@@ -508,6 +524,9 @@ export class BotStateCollector implements ScanProvider {
         const playerArray = c.players || [];
         const playerIds = c.playerIds || [];
         const playerCount = c.playerCount || 0;
+        // Scene base coordinates for converting local coords to world coords
+        const baseX = c.sceneBaseTileX || 0;
+        const baseZ = c.sceneBaseTileZ || 0;
 
         for (let i = 0; i < playerCount; i++) {
             const playerIndex = playerIds[i];
@@ -519,12 +538,16 @@ export class BotStateCollector implements ScanProvider {
             const dz = (player.z || 0) - (localPlayer.z || 0);
             const distance = Math.max(Math.abs(dx), Math.abs(dz)) >> 7;
 
+            // Convert fine-grained local coords (128 units/tile) to world coordinates
+            const playerWorldX = baseX + ((player.x || 0) >> 7);
+            const playerWorldZ = baseZ + ((player.z || 0) >> 7);
+
             players.push({
                 index: playerIndex,
                 name: player.name,
                 combatLevel: player.combatLevel || 0,
-                x: player.x || 0,
-                z: player.z || 0,
+                x: playerWorldX,
+                z: playerWorldZ,
                 distance
             });
         }

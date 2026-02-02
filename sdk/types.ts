@@ -432,7 +432,7 @@ export interface SmithResult {
 export interface OpenBankResult {
     success: boolean;
     message: string;
-    reason?: 'no_bank_found' | 'no_bank_option' | 'timeout' | 'dialog_stuck';
+    reason?: 'no_bank_found' | 'no_bank_option' | 'timeout' | 'dialog_stuck' | 'cant_reach';
 }
 
 export interface BankDepositResult {

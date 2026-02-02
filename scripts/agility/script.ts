@@ -290,9 +290,6 @@ async function navigateFaladorToTaverley(ctx: ScriptContext): Promise<boolean> {
 }
 
 /**
- * Walk to a waypoint with retries
- */
-/**
  * Eat food if HP is below a threshold
  */
 async function eatIfLow(ctx: ScriptContext, threshold: number = 0): Promise<boolean> {
@@ -306,15 +303,9 @@ async function eatIfLow(ctx: ScriptContext, threshold: number = 0): Promise<bool
     const eatThreshold = threshold > 0 ? threshold : maxHp;
 
     if (hp < eatThreshold) {
-        const inv = ctx.sdk.getInventory();
-        const food = inv.find(item => /shrimp|bread/i.test(item.name));
-        if (food) {
-            ctx.log(`HP ${hp}/${maxHp}, eating ${food.name}...`);
-            const eatOpt = food.optionsWithIndex.find(o => /eat/i.test(o.text));
-            if (eatOpt) {
-                await ctx.sdk.sendUseItem(food.slot, eatOpt.opIndex);
-            }
-            await new Promise(r => setTimeout(r, 1200));
+        const result = await ctx.bot.eatFood(/shrimp|bread/i);
+        if (result.success) {
+            ctx.log(`HP ${hp}/${maxHp}, ate food (+${result.hpGained} HP)`);
             ctx.progress();
             return true;
         }
@@ -340,21 +331,14 @@ async function eatToFull(ctx: ScriptContext): Promise<void> {
             return;
         }
 
-        const inv = ctx.sdk.getInventory();
-        const food = inv.find(item => /shrimp|bread/i.test(item.name));
-        if (!food) {
+        if (!ateAny) ctx.log(`Eating to full HP (${hp}/${maxHp})...`);
+
+        const result = await ctx.bot.eatFood(/shrimp|bread/i);
+        if (!result.success) {
             ctx.log(`No more food! HP ${hp}/${maxHp}`);
             return;
         }
-
-        if (!ateAny) ctx.log(`Eating to full HP (${hp}/${maxHp})...`);
         ateAny = true;
-
-        const eatOpt = food.optionsWithIndex.find(o => /eat/i.test(o.text));
-        if (eatOpt) {
-            await ctx.sdk.sendUseItem(food.slot, eatOpt.opIndex);
-        }
-        await new Promise(r => setTimeout(r, 1800)); // Eating delay
         ctx.progress();
     }
 }
@@ -692,18 +676,6 @@ async function completeLap(ctx: ScriptContext): Promise<boolean> {
 }
 
 /**
- * Find any agility obstacle nearby (for exploration mode)
- */
-function findAnyObstacle(ctx: ScriptContext) {
-    const locs = ctx.sdk.getNearbyLocs();
-    return locs.find(loc =>
-        loc.optionsWithIndex.some(o =>
-            /walk-across|walk-on|climb|squeeze|balance/i.test(o.text)
-        )
-    );
-}
-
-/**
  * Train combat stats at Lumbridge goblins until HP is high enough for wolves
  * Training attack/str/def gives HP XP as a byproduct
  */
@@ -732,7 +704,21 @@ async function trainCombatForHP(ctx: ScriptContext): Promise<void> {
 
     // Walk to goblin area east of Lumbridge
     ctx.log(`Walking to goblin area...`);
-    await ctx.bot.walkTo(GOBLIN_AREA.x, GOBLIN_AREA.z, 10);
+    let walkResult = await ctx.bot.walkTo(GOBLIN_AREA.x, GOBLIN_AREA.z, 10);
+
+    // If walk failed, try opening doors and retry
+    if (!walkResult.success) {
+        ctx.log(`Walk failed: ${walkResult.message}, trying to open doors...`);
+        await ctx.bot.openDoor();
+        walkResult = await ctx.bot.walkTo(GOBLIN_AREA.x, GOBLIN_AREA.z, 10);
+
+        // If still failing, use raw walk as last resort
+        if (!walkResult.success) {
+            ctx.log(`Pathfinder failed, using raw walk...`);
+            await ctx.sdk.sendWalk(GOBLIN_AREA.x, GOBLIN_AREA.z, true);
+            await new Promise(r => setTimeout(r, 5000));
+        }
+    }
     ctx.progress();
 
     // Train until HP is high enough (time-based with HP check)
@@ -930,6 +916,7 @@ runScript({
     preset: TestPresets.LUMBRIDGE_SPAWN,
     timeLimit: 20 * 60 * 1000,  // 20 minutes (combat training + long travel + agility training)
     stallTimeout: 60_000,       // 1 min - position changes now count as progress
+    launchOptions: { usePuppeteer: true },
 }, async (ctx) => {
     await trainAgility(ctx);
 });

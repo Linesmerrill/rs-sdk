@@ -5,35 +5,36 @@ import collisionData from './collision-data.json';
 
 let initialized = false;
 
-// Initialize collision data into rsmod
+interface CollisionData {
+    tiles: Array<[number, number, number, number]>;
+    zones: Array<[number, number, number]>;
+}
+
 export function initPathfinding(): void {
     if (initialized) return;
 
-    console.log(`Loading ${collisionData.tiles.length} collision tiles...`);
+    const data = collisionData as CollisionData;
     const start = Date.now();
 
-    // Track which zones we've allocated
-    const allocatedZones = new Set<string>();
+    // Allocate all zones first (includes walkable areas with no collision tiles)
+    for (const [level, zoneX, zoneZ] of data.zones) {
+        rsmod.allocateIfAbsent(zoneX, zoneZ, level);
+    }
 
-    for (const tile of collisionData.tiles) {
-        const [level, x, z, flags] = tile as [number, number, number, number];
-        // Allocate zone if needed (zones are 8x8)
-        const zoneKey = `${level},${x >> 3},${z >> 3}`;
-        if (!allocatedZones.has(zoneKey)) {
-            rsmod.allocateIfAbsent(x, z, level);
-            allocatedZones.add(zoneKey);
-        }
-
-        // Set collision flags
+    // Set collision flags for tiles that have them
+    for (const [level, x, z, flags] of data.tiles) {
         rsmod.__set(x, z, level, flags);
     }
 
     initialized = true;
-    console.log(`Pathfinding initialized in ${Date.now() - start}ms (${allocatedZones.size} zones)`);
+    console.log(`Pathfinding initialized in ${Date.now() - start}ms (${data.zones.length} zones, ${data.tiles.length} tiles)`);
 }
 
 // Check if a zone has collision data
 export function isZoneAllocated(level: number, x: number, z: number): boolean {
+    if (!initialized) {
+        initPathfinding();
+    }
     return rsmod.isZoneAllocated(x, z, level);
 }
 

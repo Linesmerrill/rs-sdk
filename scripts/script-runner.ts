@@ -273,6 +273,8 @@ export interface ScriptConfig {
         background?: boolean;
         /** Use shared browser - all scripts open as tabs in one window (default: true) */
         useSharedBrowser?: boolean;
+        /** Use Puppeteer for browser control (default: false = native browser) */
+        usePuppeteer?: boolean;
     };
 }
 
