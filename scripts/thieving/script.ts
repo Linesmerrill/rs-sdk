@@ -10,11 +10,13 @@
  * 4. Continue until level 10
  */
 
-import { runScript, TestPresets, type ScriptContext } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 
 // Get thieving stats
 function getThievingStats(ctx: ScriptContext): { level: number; xp: number } {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     const thieving = state?.skills.find(s => s.name === 'Thieving');
     return {
         level: thieving?.baseLevel ?? 1,
@@ -24,7 +26,7 @@ function getThievingStats(ctx: ScriptContext): { level: number; xp: number } {
 
 // Find a Man or Woman NPC to pickpocket
 function findTarget(ctx: ScriptContext): { npc: { index: number; name: string; optionsWithIndex: Array<{ text: string; opIndex: number }> }; pickpocketOpt: { text: string; opIndex: number } } | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return null;
 
     // Look for Man or Woman NPCs
@@ -49,7 +51,7 @@ async function pickpocket(ctx: ScriptContext): Promise<boolean> {
 
     const { npc, pickpocketOpt } = target;
     const xpBefore = getThievingStats(ctx).xp;
-    const startTick = ctx.state()?.tick ?? 0;
+    const startTick = ctx.sdk.getState()?.tick ?? 0;
 
     ctx.log(`Pickpocketing ${npc.name}...`);
     await ctx.sdk.sendInteractNpc(npc.index, pickpocketOpt.opIndex);
@@ -102,67 +104,77 @@ async function pickpocket(ctx: ScriptContext): Promise<boolean> {
 }
 
 // Main script
-runScript({
-    name: 'thieving',
-    goal: 'Train Thieving to level 10',
-    preset: TestPresets.LUMBRIDGE_SPAWN,
-    timeLimit: 15 * 60 * 1000,  // 15 minutes
-    stallTimeout: 60_000,       // 60 seconds
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
-    const { log, progress } = ctx;
+async function main() {
+    // Create fresh account
+    const username = `th${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
 
-    log('=== Thieving Training Script v1 ===');
+    // Launch browser
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
 
-    const startStats = getThievingStats(ctx);
-    log(`Starting Thieving: Level ${startStats.level} (${startStats.xp} XP)`);
+    try {
+        await runScript(async (ctx) => {
+            const { log } = ctx;
 
-    let consecutiveFails = 0;
+            log('=== Thieving Training Script v1 ===');
 
-    while (true) {
-        const stats = getThievingStats(ctx);
+            const startStats = getThievingStats(ctx);
+            log(`Starting Thieving: Level ${startStats.level} (${startStats.xp} XP)`);
 
-        if (stats.level >= 10) {
-            log(`Goal achieved! Thieving level ${stats.level}`);
-            break;
-        }
+            let consecutiveFails = 0;
 
-        // Dismiss any blocking dialogs
-        const state = ctx.state();
-        if (state?.dialog.isOpen) {
-            await ctx.sdk.sendClickDialog(0);
-            await new Promise(r => setTimeout(r, 300));
-            continue;
-        }
+            while (true) {
+                const stats = getThievingStats(ctx);
 
-        // Check if we have a target nearby
-        const target = findTarget(ctx);
-        if (!target) {
-            log('No targets nearby, walking to Lumbridge center...');
-            // Walk to Lumbridge center where Men/Women spawn
-            await ctx.bot.walkTo(3222, 3218);
-            progress();
-            consecutiveFails++;
+                if (stats.level >= 10) {
+                    log(`Goal achieved! Thieving level ${stats.level}`);
+                    break;
+                }
 
-            if (consecutiveFails >= 5) {
-                log('Too many consecutive fails, aborting');
-                break;
+                // Dismiss any blocking dialogs
+                const state = ctx.sdk.getState();
+                if (state?.dialog.isOpen) {
+                    await ctx.sdk.sendClickDialog(0);
+                    await new Promise(r => setTimeout(r, 300));
+                    continue;
+                }
+
+                // Check if we have a target nearby
+                const target = findTarget(ctx);
+                if (!target) {
+                    log('No targets nearby, walking to Lumbridge center...');
+                    // Walk to Lumbridge center where Men/Women spawn
+                    await ctx.bot.walkTo(3222, 3218);
+                    consecutiveFails++;
+
+                    if (consecutiveFails >= 5) {
+                        log('Too many consecutive fails, aborting');
+                        break;
+                    }
+                    continue;
+                }
+
+                // Attempt pickpocket
+                const success = await pickpocket(ctx);
+                if (success) {
+                    consecutiveFails = 0;
+                } else {
+                    consecutiveFails++;
+                }
+
+                // Small delay between attempts
+                await new Promise(r => setTimeout(r, 600));
             }
-            continue;
-        }
 
-        // Attempt pickpocket
-        const success = await pickpocket(ctx);
-        if (success) {
-            consecutiveFails = 0;
-        } else {
-            consecutiveFails++;
-        }
-
-        // Small delay between attempts
-        await new Promise(r => setTimeout(r, 600));
+            const endStats = getThievingStats(ctx);
+            log(`\n=== Complete: Level ${endStats.level} (${endStats.xp} XP) ===`);
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 15 * 60 * 1000,  // 15 minutes
+        });
+    } finally {
+        await session.cleanup();
     }
+}
 
-    const endStats = getThievingStats(ctx);
-    log(`\n=== Complete: Level ${endStats.level} (${endStats.xp} XP) ===`);
-});
+main().catch(console.error);

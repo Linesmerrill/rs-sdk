@@ -16,8 +16,9 @@
  * 3. Log progress and track XP gains
  */
 
-import { runScript, TestPresets } from '../script-runner';
-import type { ScriptContext } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 import type { NearbyNpc } from '../../sdk/types';
 
 // Spell component IDs
@@ -40,7 +41,7 @@ const MAGIC_XP_TABLE = [
  * Find the best target for magic training
  */
 function findTarget(ctx: ScriptContext): NearbyNpc | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return null;
 
     // Prefer chickens (weakest), then rats, then goblins
@@ -123,7 +124,7 @@ interface MagicStats {
  * Main magic training loop
  */
 async function magicTrainingLoop(ctx: ScriptContext): Promise<void> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) throw new Error('No initial state');
 
     // Initialize stats
@@ -162,10 +163,13 @@ async function magicTrainingLoop(ctx: ScriptContext): Promise<void> {
     }
 
     let noTargetCount = 0;
+    let failedCastCount = 0;
+    const MAX_NO_TARGET_ATTEMPTS = 30;  // Exit if no targets for too long
+    const MAX_FAILED_CASTS = 5;  // Exit if too many failed casts in a row
 
     // Main loop
     while (true) {
-        const currentState = ctx.state();
+        const currentState = ctx.sdk.getState();
         if (!currentState) {
             ctx.warn('Lost game state');
             break;
@@ -197,14 +201,18 @@ async function magicTrainingLoop(ctx: ScriptContext): Promise<void> {
         const target = findTarget(ctx);
         if (!target) {
             noTargetCount++;
+            if (noTargetCount >= MAX_NO_TARGET_ATTEMPTS) {
+                ctx.log(`No targets found after ${noTargetCount} attempts, exiting.`);
+                break;
+            }
             if (noTargetCount % 5 === 0) {
-                ctx.log(`No targets nearby (attempt ${noTargetCount}), walking around...`);
+                ctx.log(`No targets nearby (attempt ${noTargetCount}/${MAX_NO_TARGET_ATTEMPTS}), walking around...`);
                 // Walk to chicken coop center
                 await ctx.bot.walkTo(
                     CHICKEN_COOP.x + Math.floor(Math.random() * 6) - 3,
                     CHICKEN_COOP.z + Math.floor(Math.random() * 6) - 3
                 );
-                        }
+            }
             await new Promise(r => setTimeout(r, 500));
             continue;
         }
@@ -237,6 +245,7 @@ async function magicTrainingLoop(ctx: ScriptContext): Promise<void> {
         stats.lastCastTime = now;
 
         if (castResult.success) {
+            failedCastCount = 0;  // Reset on success
             if (castResult.hit) {
                 stats.hits++;
                 ctx.log(`HIT! ${castResult.message}`);
@@ -250,8 +259,19 @@ async function magicTrainingLoop(ctx: ScriptContext): Promise<void> {
             if (gateResult.success) {
                 await ctx.bot.walkTo(CHICKEN_COOP.x - 3, CHICKEN_COOP.z);
             }
+            failedCastCount++;
         } else if (castResult.reason === 'no_runes') {
             ctx.log('Out of runes!');
+            break;
+        } else {
+            // Unknown failure reason
+            failedCastCount++;
+            ctx.log(`Cast failed: ${castResult.message} (reason: ${castResult.reason})`);
+        }
+
+        // Exit if too many consecutive failures
+        if (failedCastCount >= MAX_FAILED_CASTS) {
+            ctx.log(`Too many failed casts (${failedCastCount}), exiting.`);
             break;
         }
 
@@ -285,23 +305,34 @@ function logFinalStats(ctx: ScriptContext, stats: MagicStats): void {
     ctx.log(`Remaining runes: Air=${runes.air}, Mind=${runes.mind}, Water=${runes.water}, Earth=${runes.earth}`);
 }
 
-// Run the script
-runScript({
-    name: 'magic',
-    goal: 'Train Magic using Wind Strike on chickens',
-    preset: TestPresets.LUMBRIDGE_SPAWN,
-    timeLimit: 5 * 60 * 1000,  // 5 minutes
-    stallTimeout: 60_000,      // 60 seconds
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
+// Main script
+async function main() {
+    // Create fresh account
+    const username = `mg${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
+
+    // Launch browser
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
+
     try {
-        await magicTrainingLoop(ctx);
+        await runScript(async (ctx) => {
+            try {
+                await magicTrainingLoop(ctx);
+            } finally {
+                // Log final state
+                const state = ctx.sdk.getState();
+                if (state) {
+                    const magic = state.skills.find(s => s.name === 'Magic');
+                    ctx.log(`Final Magic: Level ${magic?.baseLevel ?? '?'}, XP ${magic?.experience ?? '?'}`);
+                }
+            }
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 5 * 60 * 1000,  // 5 minutes
+        });
     } finally {
-        // Log final state
-        const state = ctx.state();
-        if (state) {
-            const magic = state.skills.find(s => s.name === 'Magic');
-            ctx.log(`Final Magic: Level ${magic?.baseLevel ?? '?'}, XP ${magic?.experience ?? '?'}`);
-        }
+        await session.cleanup();
     }
-});
+}
+
+main().catch(console.error);

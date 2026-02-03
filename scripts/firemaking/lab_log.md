@@ -47,8 +47,8 @@ Training Firemaking from level 1 to level 10+ starting from Lumbridge.
 - Trees respawn quickly near Lumbridge
 
 ### 2. Process & Tooling Reflections
-- The script-runner framework works well out of the box
-- State delta logging (`[delta]` output) is very helpful for understanding what happened
+- The sdk/runner framework works well out of the box
+- Final state output is helpful for understanding what happened
 - Bot actions like `chopTree()` and `burnLogs()` abstract away complexity nicely
 
 ### 3. SDK Issues & Gaps

@@ -135,7 +135,7 @@ if (currentState.inventory.length > 20) {
 ## Stuckness Detection
 
 ### Custom Stuckness Checks
-Add script-specific stuckness detection beyond the default stall timeout:
+Add script-specific stuckness detection beyond the overall timeout:
 
 ```typescript
 const STUCK_CONFIG = {
@@ -152,12 +152,10 @@ function checkStuck(ctx, stats) {
 }
 ```
 
-### Throw StallError to Abort Cleanly
+### Throw Error to Abort Cleanly
 ```typescript
-import { StallError } from '../script-runner';
-
 if (stuckReason) {
-    throw new StallError(`STUCK: ${stuckReason}`);
+    throw new Error(`STUCK: ${stuckReason}`);
 }
 ```
 
@@ -187,14 +185,14 @@ The toll gate requires special handling - `openDoor()` doesn't work because it's
 await ctx.bot.walkTo(3268, 3228);
 
 // Click gate to trigger dialog
-const gate = ctx.state()?.nearbyLocs.find(l => /gate/i.test(l.name));
+const gate = ctx.sdk.getState()?.nearbyLocs.find(l => /gate/i.test(l.name));
 const openOpt = gate.optionsWithIndex.find(o => /open/i.test(o.text));
 await ctx.sdk.sendInteractLoc(gate.x, gate.z, gate.id, openOpt.opIndex);
 await new Promise(r => setTimeout(r, 800));
 
 // Handle dialog - click through until "Yes, ok." option appears
 for (let i = 0; i < 20; i++) {
-    const s = ctx.state();
+    const s = ctx.sdk.getState();
     if (!s?.dialog.isOpen) {
         await new Promise(r => setTimeout(r, 150));
         continue;
@@ -212,7 +210,7 @@ for (let i = 0; i < 20; i++) {
 await new Promise(r => setTimeout(r, 500));
 for (let i = 0; i < 3; i++) {
     await ctx.bot.walkTo(3277, 3227);  // Inside Al Kharid
-    if (ctx.state()?.player?.worldX >= 3270) break;  // Success
+    if (ctx.sdk.getState()?.player?.worldX >= 3270) break;  // Success
     await new Promise(r => setTimeout(r, 500));
 }
 ```
@@ -220,7 +218,7 @@ for (let i = 0; i < 3; i++) {
 ### Al Kharid Detection
 Position `x >= 3270` means you're inside Al Kharid:
 ```typescript
-const isInAlKharid = ctx.state()?.player?.worldX >= 3270;
+const isInAlKharid = ctx.sdk.getState()?.player?.worldX >= 3270;
 ```
 
 ## Buying Kebabs in Al Kharid
@@ -240,7 +238,7 @@ await new Promise(r => setTimeout(r, 1000));
 
 // Handle dialog - click through and select "Yes please."
 for (let i = 0; i < 15; i++) {
-    const s = ctx.state();
+    const s = ctx.sdk.getState();
     if (!s?.dialog.isOpen) {
         await new Promise(r => setTimeout(r, 200));
         continue;

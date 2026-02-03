@@ -10,7 +10,9 @@
  * - Return to fishing spot and repeat
  */
 
-import { runScript, type ScriptContext, StallError, TestPresets } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 import type { NearbyNpc, NearbyLoc, InventoryItem } from '../../sdk/types';
 
 // Al-Kharid locations
@@ -33,22 +35,20 @@ interface Stats {
 
 // ============ Helper Functions ============
 
-// Note: ctx.progress() removed - bot actions and movement auto-reset stall timer
-
 function getFishingXp(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Fishing')?.experience ?? 0;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Fishing')?.experience ?? 0;
 }
 
 function getFishingLevel(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Fishing')?.baseLevel ?? 1;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Fishing')?.baseLevel ?? 1;
 }
 
 function getCookingXp(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Cooking')?.experience ?? 0;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Cooking')?.experience ?? 0;
 }
 
 function getCookingLevel(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Cooking')?.baseLevel ?? 1;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Cooking')?.baseLevel ?? 1;
 }
 
 function getCombinedLevel(ctx: ScriptContext): number {
@@ -56,7 +56,7 @@ function getCombinedLevel(ctx: ScriptContext): number {
 }
 
 function getPlayerPos(ctx: ScriptContext): { x: number; z: number } | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state?.player) return null;
     return { x: state.player.worldX, z: state.player.worldZ };
 }
@@ -71,7 +71,7 @@ function distanceTo(ctx: ScriptContext, target: { x: number; z: number }): numbe
  * Find the nearest fishing spot (Net option)
  */
 function findFishingSpot(ctx: ScriptContext): NearbyNpc | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return null;
 
     // Find any fishing spot with "Net" option
@@ -87,7 +87,7 @@ function findFishingSpot(ctx: ScriptContext): NearbyNpc | null {
  * Find any fishing spot nearby (for debugging)
  */
 function findAnyFishingSpot(ctx: ScriptContext): NearbyNpc | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return null;
 
     return state.nearbyNpcs
@@ -99,7 +99,7 @@ function findAnyFishingSpot(ctx: ScriptContext): NearbyNpc | null {
  * Count raw fish in inventory
  */
 function countRawFish(ctx: ScriptContext): number {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return 0;
 
     return state.inventory
@@ -111,7 +111,7 @@ function countRawFish(ctx: ScriptContext): number {
  * Get all raw fish items in inventory
  */
 function getRawFishItems(ctx: ScriptContext): InventoryItem[] {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return [];
 
     return state.inventory.filter(item => /^raw\s/i.test(item.name));
@@ -121,7 +121,7 @@ function getRawFishItems(ctx: ScriptContext): InventoryItem[] {
  * Count cooked fish in inventory (shrimp/anchovies without "raw" prefix)
  */
 function countCookedFish(ctx: ScriptContext): number {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return 0;
 
     return state.inventory
@@ -136,7 +136,7 @@ function countCookedFish(ctx: ScriptContext): number {
  * Get cooked fish items in inventory
  */
 function getCookedFishItems(ctx: ScriptContext): InventoryItem[] {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return [];
 
     return state.inventory.filter(item =>
@@ -149,14 +149,14 @@ function getCookedFishItems(ctx: ScriptContext): InventoryItem[] {
  * Get inventory count (used slots)
  */
 function getInventoryCount(ctx: ScriptContext): number {
-    return ctx.state()?.inventory.length ?? 0;
+    return ctx.sdk.getState()?.inventory.length ?? 0;
 }
 
 /**
  * Get count of non-fishing-net items (to check for fish capacity)
  */
 function getAvailableFishSlots(ctx: ScriptContext): number {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return 0;
     // Count items that aren't fishing net
     const nonNetItems = state.inventory.filter(i => !/fishing\s*net/i.test(i.name)).length;
@@ -168,11 +168,10 @@ function getAvailableFishSlots(ctx: ScriptContext): number {
  */
 async function dismissDialogs(ctx: ScriptContext, stats: Stats, maxCount: number = 3): Promise<number> {
     let dismissed = 0;
-    while (ctx.state()?.dialog.isOpen && dismissed < maxCount) {
+    while (ctx.sdk.getState()?.dialog.isOpen && dismissed < maxCount) {
         await ctx.sdk.sendClickDialog(0);
         await new Promise(r => setTimeout(r, 200));
         dismissed++;
-        // progress auto-tracked
     }
     return dismissed;
 }
@@ -183,7 +182,6 @@ async function dismissDialogs(ctx: ScriptContext, stats: Stats, maxCount: number
 async function walkToPosition(ctx: ScriptContext, stats: Stats, target: { x: number; z: number }, name: string): Promise<boolean> {
     const startDist = distanceTo(ctx, target);
     ctx.log(`Walking to ${name} (${target.x}, ${target.z}), dist: ${startDist}...`);
-    // progress auto-tracked
 
     // For long distances, use bot.walkTo which handles pathfinding
     if (startDist > 30) {
@@ -217,7 +215,6 @@ async function walkToPosition(ctx: ScriptContext, stats: Stats, target: { x: num
     // Wait to arrive (within 5 tiles)
     for (let i = 0; i < 40; i++) {
         await new Promise(r => setTimeout(r, 400));
-        // progress auto-tracked
 
         // Dismiss any dialogs
         await dismissDialogs(ctx, stats, 1);
@@ -252,7 +249,6 @@ async function fishUntilFull(ctx: ScriptContext, stats: Stats): Promise<void> {
     // Fish until no available slots for raw fish
     while (getAvailableFishSlots(ctx) > 0) {
         attempts++;
-        if (attempts % 10 === 0) // progress auto-tracked
 
         // Dismiss dialogs
         if (await dismissDialogs(ctx, stats) > 0) continue;
@@ -264,7 +260,6 @@ async function fishUntilFull(ctx: ScriptContext, stats: Stats): Promise<void> {
             if (currentFish % 5 === 0 || currentFish - lastFishCount > 1) {
                 ctx.log(`Fish caught: ${stats.fishCaught} (slots: ${getAvailableFishSlots(ctx)} free)`);
             }
-            // progress auto-tracked
             noSpotCount = 0;  // Reset counter when we catch fish
         }
         lastFishCount = currentFish;
@@ -293,14 +288,13 @@ async function fishUntilFull(ctx: ScriptContext, stats: Stats): Promise<void> {
                         await ctx.sdk.sendWalk(anySpot.x, anySpot.z, true);
                         await new Promise(r => setTimeout(r, 2000));
                     } else {
-                        const nearbyNpcs = ctx.state()?.nearbyNpcs.slice(0, 5) ?? [];
+                        const nearbyNpcs = ctx.sdk.getState()?.nearbyNpcs.slice(0, 5) ?? [];
                         ctx.log(`No spot visible. NPCs: ${nearbyNpcs.map(n => n.name).join(', ') || 'none'}`);
                         // Walk around a bit to find the spot
                         await ctx.sdk.sendWalk(LOCATIONS.FISHING_SPOT.x + (Math.random() > 0.5 ? 3 : -3), LOCATIONS.FISHING_SPOT.z, true);
                         await new Promise(r => setTimeout(r, 1500));
                     }
                 }
-                // progress auto-tracked
                 noSpotCount = 0;
             }
 
@@ -316,7 +310,6 @@ async function fishUntilFull(ctx: ScriptContext, stats: Stats): Promise<void> {
         }
 
         await ctx.sdk.sendInteractNpc(spot.index, netOpt.opIndex);
-        // progress auto-tracked
         await new Promise(r => setTimeout(r, 200));
     }
 
@@ -336,10 +329,10 @@ async function cookAllFish(ctx: ScriptContext, stats: Stats): Promise<void> {
     ctx.log('Phase 2: Cooking fish at range...');
 
     // Find the range
-    const range = ctx.state()?.nearbyLocs.find(loc => /range|stove/i.test(loc.name));
+    const range = ctx.sdk.getState()?.nearbyLocs.find(loc => /range|stove/i.test(loc.name));
     if (!range) {
         ctx.warn('No range found nearby');
-        const locs = ctx.state()?.nearbyLocs.slice(0, 10) ?? [];
+        const locs = ctx.sdk.getState()?.nearbyLocs.slice(0, 10) ?? [];
         ctx.log(`Nearby locs: ${locs.map(l => l.name).join(', ')}`);
         return;
     }
@@ -356,15 +349,13 @@ async function cookAllFish(ctx: ScriptContext, stats: Stats): Promise<void> {
 
         // Use fish on range
         await ctx.sdk.sendUseItemOnLoc(rawFish.slot, range.x, range.z, range.id);
-        // progress auto-tracked
 
         // Wait for cooking to happen (XP gain or raw fish count decrease)
         // Also handle any interface/dialog that appears
         for (let i = 0; i < 15; i++) {
             await new Promise(r => setTimeout(r, 300));
-            // progress auto-tracked
 
-            const state = ctx.state();
+            const state = ctx.sdk.getState();
 
             // Handle cooking interface if it appears
             const firstInterfaceOpt = state?.interface?.options[0];
@@ -375,7 +366,6 @@ async function cookAllFish(ctx: ScriptContext, stats: Stats): Promise<void> {
                 let noChange = 0;
                 while (noChange < 10 && countRawFish(ctx) > 0) {
                     await new Promise(r => setTimeout(r, 400));
-                    // progress auto-tracked
                     await dismissDialogs(ctx, stats, 1);
                     const prev = countRawFish(ctx);
                     await new Promise(r => setTimeout(r, 200));
@@ -438,7 +428,7 @@ async function tryBanking(ctx: ScriptContext, stats: Stats, cookedBefore: number
     }
 
     // Debug: log what we see at the bank
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     const bankBooths = state?.nearbyLocs.filter(l => /bank/i.test(l.name)) ?? [];
     const bankers = state?.nearbyNpcs.filter(n => /banker/i.test(n.name)) ?? [];
     ctx.log(`At bank: ${bankBooths.length} booths, ${bankers.length} bankers`);
@@ -494,9 +484,8 @@ async function waitForBankInterface(ctx: ScriptContext, stats: Stats): Promise<b
     // Wait for interface OR dialog to appear
     for (let i = 0; i < 40; i++) {  // 8 seconds total
         await new Promise(r => setTimeout(r, 200));
-        // progress auto-tracked
 
-        const currentState = ctx.state();
+        const currentState = ctx.sdk.getState();
 
         // Bank interface opened!
         if (currentState?.interface?.isOpen) {
@@ -530,7 +519,7 @@ async function waitForBankInterface(ctx: ScriptContext, stats: Stats): Promise<b
  * Deposit cooked fish when bank interface is open
  */
 async function depositCookedFish(ctx: ScriptContext, stats: Stats, cookedBefore: number): Promise<boolean> {
-    const currentState = ctx.state();
+    const currentState = ctx.sdk.getState();
     if (!currentState?.interface?.isOpen) {
         ctx.warn('Bank interface not open');
         return false;
@@ -546,7 +535,6 @@ async function depositCookedFish(ctx: ScriptContext, stats: Stats, cookedBefore:
         ctx.log(`  ${item.name} x${item.count} from slot ${item.slot}`);
         await ctx.sdk.sendBankDeposit(item.slot, item.count);
         await new Promise(r => setTimeout(r, 150));
-        // progress auto-tracked
     }
 
     await new Promise(r => setTimeout(r, 300));
@@ -563,7 +551,7 @@ async function depositCookedFish(ctx: ScriptContext, stats: Stats, cookedBefore:
  * Drop all cooked and burnt fish
  */
 async function dropCookedFish(ctx: ScriptContext, stats: Stats): Promise<void> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return;
 
     const itemsToDrop = state.inventory.filter(item =>
@@ -574,7 +562,6 @@ async function dropCookedFish(ctx: ScriptContext, stats: Stats): Promise<void> {
     for (const item of itemsToDrop) {
         await ctx.sdk.sendDropItem(item.slot);
         dropped += item.count;
-        // progress auto-tracked
         await new Promise(r => setTimeout(r, 100));
     }
 
@@ -585,7 +572,7 @@ async function dropCookedFish(ctx: ScriptContext, stats: Stats): Promise<void> {
  * Log final statistics
  */
 function logFinalStats(ctx: ScriptContext, stats: Stats) {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     const fishing = state?.skills.find(s => s.name === 'Fishing');
     const cooking = state?.skills.find(s => s.name === 'Cooking');
 
@@ -631,10 +618,9 @@ async function mainLoop(ctx: ScriptContext, stats: Stats): Promise<void> {
     ctx.log('=== Fishing + Cooking Speedrun (v4 - Range & Bank) ===');
     ctx.log(`Starting levels: Fishing ${getFishingLevel(ctx)}, Cooking ${getCookingLevel(ctx)}`);
     ctx.log(`Combined: ${getCombinedLevel(ctx)}`);
-    ctx.log(`Position: (${ctx.state()?.player?.worldX}, ${ctx.state()?.player?.worldZ})`);
+    ctx.log(`Position: (${ctx.sdk.getState()?.player?.worldX}, ${ctx.sdk.getState()?.player?.worldZ})`);
 
     await ctx.bot.dismissBlockingUI();
-    // progress auto-tracked
 
     // Ensure we start at the fishing spot
     await ensureAtFishingSpot(ctx, stats);
@@ -656,41 +642,48 @@ async function mainLoop(ctx: ScriptContext, stats: Stats): Promise<void> {
         // Phase 4: Walk back to fishing spot
         ctx.log('Phase 4: Returning to fishing spot...');
         await walkToPosition(ctx, stats, LOCATIONS.FISHING_SPOT, 'fishing spot');
-
-        // progress auto-tracked
     }
 }
 
-// Run the script
-runScript({
-    name: 'fishing-speedrun',
-    goal: 'Maximize combined Fishing+Cooking level in 10 minutes at Al-Kharid (range + bank)',
-    preset: TestPresets.FISHER_COOK_AT_DRAYNOR,
-    timeLimit: 10 * 60 * 1000,      // 10 minutes
-    stallTimeout: 30_000,           // 30 seconds (walking takes time)
-    screenshotInterval: 15_000,
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
-    const stats: Stats = {
-        fishCaught: 0,
-        fishCooked: 0,
-        fishBanked: 0,
-        cycles: 0,
-        startFishingXp: getFishingXp(ctx),
-        startCookingXp: getCookingXp(ctx),
-        startTime: Date.now(),
-        lastProgressTime: Date.now(),
-    };
+async function main() {
+    // Create fresh account
+    const username = `FS${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.FISHER_COOK_AT_DRAYNOR);
+
+    // Launch browser
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
 
     try {
-        await mainLoop(ctx, stats);
-    } catch (e) {
-        if (e instanceof StallError) {
-            ctx.error(`Script aborted: ${e.message}`);
-        } else {
-            throw e;
-        }
+        await runScript(async (ctx) => {
+            const stats: Stats = {
+                fishCaught: 0,
+                fishCooked: 0,
+                fishBanked: 0,
+                cycles: 0,
+                startFishingXp: getFishingXp(ctx),
+                startCookingXp: getCookingXp(ctx),
+                startTime: Date.now(),
+                lastProgressTime: Date.now(),
+            };
+
+            try {
+                await mainLoop(ctx, stats);
+            } catch (e) {
+                if (e instanceof Error) {
+                    ctx.error(`Script aborted: ${e.message}`);
+                } else {
+                    throw e;
+                }
+            } finally {
+                logFinalStats(ctx, stats);
+            }
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 10 * 60 * 1000,
+        });
     } finally {
-        logFinalStats(ctx, stats);
+        await session.cleanup();
     }
-});
+}
+
+main().catch(console.error);

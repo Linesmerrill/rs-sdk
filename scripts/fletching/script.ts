@@ -16,7 +16,9 @@
  * - Longbow: 10 XP (level 10 required)
  */
 
-import { runScript, TestPresets, type ScriptContext, StallError } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 
 // Locations
 const KNIFE_SPAWN = { x: 3224, z: 3202 }; // SE of Lumbridge castle (actual spawn location)
@@ -26,15 +28,15 @@ const LUMBRIDGE_TREES = { x: 3200, z: 3230 }; // Trees west of Lumbridge castle
 const TARGET_LEVEL = 10;
 
 function getFletchingLevel(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Fletching')?.baseLevel ?? 1;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Fletching')?.baseLevel ?? 1;
 }
 
 function getFletchingXp(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Fletching')?.experience ?? 0;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Fletching')?.experience ?? 0;
 }
 
 function countLogs(ctx: ScriptContext): number {
-    const inv = ctx.state()?.inventory ?? [];
+    const inv = ctx.sdk.getState()?.inventory ?? [];
     return inv.filter(i => /^logs$/i.test(i.name)).length;
 }
 
@@ -43,18 +45,18 @@ function hasKnife(ctx: ScriptContext): boolean {
 }
 
 function hasAxe(ctx: ScriptContext): boolean {
-    const inv = ctx.state()?.inventory ?? [];
-    const equip = ctx.state()?.equipment ?? [];
+    const inv = ctx.sdk.getState()?.inventory ?? [];
+    const equip = ctx.sdk.getState()?.equipment ?? [];
     return inv.some(i => /axe/i.test(i.name)) || equip.some(i => /axe/i.test(i.name));
 }
 
 function getInventoryFreeSlots(ctx: ScriptContext): number {
-    const inv = ctx.state()?.inventory ?? [];
+    const inv = ctx.sdk.getState()?.inventory ?? [];
     return 28 - inv.length;
 }
 
 async function dropFletchedItems(ctx: ScriptContext): Promise<void> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return;
 
     // Drop arrow shafts and bows (keep knife, axe, logs)
@@ -78,7 +80,7 @@ async function dropFletchedItems(ctx: ScriptContext): Promise<void> {
 }
 
 async function acquireKnife(ctx: ScriptContext): Promise<boolean> {
-    const { bot, sdk, log, progress } = ctx;
+    const { bot, sdk, log } = ctx;
 
     // First check if knife is already visible from starting position
     let knife = sdk.findGroundItem(/knife/i);
@@ -87,7 +89,6 @@ async function acquireKnife(ctx: ScriptContext): Promise<boolean> {
         const result = await bot.pickupItem(knife);
         if (result.success) {
             log('Got knife!');
-            progress();
             return true;
         }
     }
@@ -96,10 +97,9 @@ async function acquireKnife(ctx: ScriptContext): Promise<boolean> {
     log(`Walking to knife spawn at (${KNIFE_SPAWN.x}, ${KNIFE_SPAWN.z})...`);
     const walkResult = await bot.walkTo(KNIFE_SPAWN.x, KNIFE_SPAWN.z);
     log(`Walk result: ${walkResult.message}`);
-    progress();
 
     // Log current position for debugging
-    const pos = ctx.state()?.player;
+    const pos = ctx.sdk.getState()?.player;
     log(`Current position after walk: (${pos?.worldX}, ${pos?.worldZ})`);
 
     // Try to pick up knife from ground - wait for respawn if needed
@@ -110,21 +110,19 @@ async function acquireKnife(ctx: ScriptContext): Promise<boolean> {
             const result = await bot.pickupItem(knife);
             if (result.success) {
                 log('Got knife!');
-                progress();
                 return true;
             } else {
                 log(`Pickup failed: ${result.message}`);
             }
         } else {
             // Log nearby ground items for debugging
-            const groundItems = ctx.state()?.groundItems ?? [];
+            const groundItems = ctx.sdk.getState()?.groundItems ?? [];
             if (groundItems.length > 0) {
                 log(`Nearby ground items: ${groundItems.map(i => `${i.name} at (${i.x},${i.z})`).join(', ')}`);
             }
             log(`No knife visible (attempt ${attempt + 1}/15), waiting for respawn...`);
         }
         await sleep(2000); // Wait 2s for potential respawn
-        progress();
     }
 
     // If no knife on ground, check if we can buy from a shop that sells knives
@@ -133,7 +131,7 @@ async function acquireKnife(ctx: ScriptContext): Promise<boolean> {
         log('No knife found on ground. Checking for alternative sources...');
 
         // Check if there's a knife anywhere nearby we missed
-        const allGroundItems = ctx.state()?.groundItems ?? [];
+        const allGroundItems = ctx.sdk.getState()?.groundItems ?? [];
         log(`All visible ground items (${allGroundItems.length}): ${allGroundItems.map(i => i.name).join(', ')}`);
     }
 
@@ -141,11 +139,10 @@ async function acquireKnife(ctx: ScriptContext): Promise<boolean> {
 }
 
 async function chopAndFletch(ctx: ScriptContext): Promise<void> {
-    const { bot, sdk, log, progress } = ctx;
+    const { bot, sdk, log } = ctx;
 
     log(`Walking to trees at (${LUMBRIDGE_TREES.x}, ${LUMBRIDGE_TREES.z})...`);
     await bot.walkTo(LUMBRIDGE_TREES.x, LUMBRIDGE_TREES.z);
-    progress();
 
     let logsChopped = 0;
     let itemsFletched = 0;
@@ -154,7 +151,7 @@ async function chopAndFletch(ctx: ScriptContext): Promise<void> {
     const LOGS_PER_BATCH = 5; // Chop this many logs before fletching
 
     while (getFletchingLevel(ctx) < TARGET_LEVEL) {
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (!state) {
             await sleep(500);
             continue;
@@ -164,7 +161,6 @@ async function chopAndFletch(ctx: ScriptContext): Promise<void> {
         if (state.dialog.isOpen) {
             log('Dismissing dialog...');
             await sdk.sendClickDialog(0);
-            progress();
             await sleep(300);
             continue;
         }
@@ -201,7 +197,7 @@ async function chopAndFletch(ctx: ScriptContext): Promise<void> {
 
             while (countLogs(ctx) > 0 && consecutiveFailures < 3) {
                 // Dismiss any dialogs
-                if (ctx.state()?.dialog.isOpen) {
+                if (ctx.sdk.getState()?.dialog.isOpen) {
                     await sdk.sendClickDialog(0);
                     await sleep(200);
                     continue;
@@ -214,7 +210,6 @@ async function chopAndFletch(ctx: ScriptContext): Promise<void> {
                     fletchedThisBatch++;
                     itemsFletched++;
                     consecutiveFailures = 0;
-                    progress();
 
                     const newLevel = getFletchingLevel(ctx);
                     if (newLevel > level) {
@@ -239,18 +234,16 @@ async function chopAndFletch(ctx: ScriptContext): Promise<void> {
         if (!tree) {
             log('No tree nearby, walking to tree area...');
             await bot.walkTo(LUMBRIDGE_TREES.x, LUMBRIDGE_TREES.z);
-            progress();
             stuckCount++;
 
             if (stuckCount > MAX_STUCK) {
-                throw new StallError('Unable to find trees after multiple attempts');
+                throw new Error('Unable to find trees after multiple attempts');
             }
             continue;
         }
 
         // Chop the tree
         const result = await bot.chopTree(tree);
-        progress();
 
         if (result.success) {
             logsChopped++;
@@ -261,7 +254,7 @@ async function chopAndFletch(ctx: ScriptContext): Promise<void> {
             stuckCount++;
 
             if (stuckCount > MAX_STUCK) {
-                throw new StallError(`Stuck: ${stuckCount} failed chop attempts`);
+                throw new Error(`Stuck: ${stuckCount} failed chop attempts`);
             }
         }
 
@@ -272,61 +265,67 @@ async function chopAndFletch(ctx: ScriptContext): Promise<void> {
 }
 
 // Main script
-runScript({
-    name: 'fletching',
-    goal: `Train Fletching to level ${TARGET_LEVEL}`,
-    preset: TestPresets.LUMBRIDGE_SPAWN,
-    timeLimit: 10 * 60 * 1000,  // 10 minutes
-    stallTimeout: 45_000,       // 45 seconds
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
-    const { log, progress } = ctx;
+async function main() {
+    const username = `fl${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
 
-    log('=== Fletching Trainer ===');
-    log(`Goal: Level ${TARGET_LEVEL}`);
+    try {
+        await runScript(async (ctx) => {
+            const { log } = ctx;
 
-    // Wait for state to initialize
-    await sleep(2000);
-    progress();
+            log('=== Fletching Trainer ===');
+            log(`Goal: Level ${TARGET_LEVEL}`);
 
-    const state = ctx.state();
-    if (!state?.player) {
-        ctx.error('No player state');
-        return;
+            // Wait for state to initialize
+            await sleep(2000);
+
+            const state = ctx.sdk.getState();
+            if (!state?.player) {
+                ctx.error('No player state');
+                return;
+            }
+
+            log(`Starting at (${state.player.worldX}, ${state.player.worldZ})`);
+            log(`Current Fletching level: ${getFletchingLevel(ctx)}`);
+
+            // Dismiss any startup dialogs
+            await ctx.bot.dismissBlockingUI();
+
+            // Step 1: Get a knife
+            if (!hasKnife(ctx)) {
+                log('No knife found, acquiring one...');
+                const gotKnife = await acquireKnife(ctx);
+                if (!gotKnife) {
+                    ctx.error('Failed to acquire knife, cannot continue');
+                    return;
+                }
+            } else {
+                log('Already have a knife!');
+            }
+
+            // Verify we have an axe
+            if (!hasAxe(ctx)) {
+                ctx.error('No axe found! The preset should include a bronze axe.');
+                return;
+            }
+            log('Have axe - ready to chop trees');
+
+            // Step 2: Chop trees and fletch until target level
+            log('Starting fletching training...');
+            await chopAndFletch(ctx);
+
+            log('=== Script Complete ===');
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 10 * 60 * 1000,  // 10 minutes
+        });
+    } finally {
+        await session.cleanup();
     }
+}
 
-    log(`Starting at (${state.player.worldX}, ${state.player.worldZ})`);
-    log(`Current Fletching level: ${getFletchingLevel(ctx)}`);
-
-    // Dismiss any startup dialogs
-    await ctx.bot.dismissBlockingUI();
-    progress();
-
-    // Step 1: Get a knife
-    if (!hasKnife(ctx)) {
-        log('No knife found, acquiring one...');
-        const gotKnife = await acquireKnife(ctx);
-        if (!gotKnife) {
-            ctx.error('Failed to acquire knife, cannot continue');
-            return;
-        }
-    } else {
-        log('Already have a knife!');
-    }
-
-    // Verify we have an axe
-    if (!hasAxe(ctx)) {
-        ctx.error('No axe found! The preset should include a bronze axe.');
-        return;
-    }
-    log('Have axe - ready to chop trees');
-
-    // Step 2: Chop trees and fletch until target level
-    log('Starting fletching training...');
-    await chopAndFletch(ctx);
-
-    log('=== Script Complete ===');
-});
+main().catch(console.error);
 
 // Helper
 function sleep(ms: number): Promise<void> {

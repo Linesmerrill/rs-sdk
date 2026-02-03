@@ -12,8 +12,9 @@
  * - Track: kills, hides collected, hides banked, bank trips
  */
 
-import { runScript, TestPresets, StallError } from '../script-runner';
-import type { ScriptContext } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 import type { NearbyNpc } from '../../sdk/types';
 
 // Locations
@@ -45,7 +46,7 @@ interface HideStats {
  * - Sorts by distance
  */
 function findBestCow(ctx: ScriptContext): NearbyNpc | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return null;
 
     const cows = state.nearbyNpcs
@@ -89,7 +90,7 @@ async function waitForCombatEnd(
     while (Date.now() - startTime < maxWaitMs) {
         await new Promise(r => setTimeout(r, 400));
         loopCount++;
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (!state) return 'lost_target';
 
         // CRITICAL: Dismiss any dialogs during combat (level-up messages)
@@ -147,7 +148,7 @@ async function waitForCombatEnd(
  */
 async function pickupHides(ctx: ScriptContext, stats: HideStats): Promise<number> {
     let pickedUp = 0;
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return 0;
 
     // Check inventory space
@@ -161,7 +162,7 @@ async function pickupHides(ctx: ScriptContext, stats: HideStats): Promise<number
         .sort((a, b) => a.distance - b.distance);
 
     for (const item of groundItems.slice(0, 3)) {
-        if (ctx.state()!.inventory.length >= 28) break;
+        if (ctx.sdk.getState()!.inventory.length >= 28) break;
 
         ctx.log(`Picking up ${item.name}...`);
         const result = await ctx.bot.pickupItem(item);
@@ -182,7 +183,7 @@ async function bankHides(ctx: ScriptContext, stats: HideStats): Promise<boolean>
     ctx.log('=== Banking Trip ===');
     stats.bankTrips++;
 
-    const currentState = ctx.state();
+    const currentState = ctx.sdk.getState();
     const currentLevel = currentState?.player?.level ?? 0;
     const hidesBeforeBank = currentState?.inventory.filter(i => /cow\s*hide/i.test(i.name)).length ?? 0;
 
@@ -198,7 +199,7 @@ async function bankHides(ctx: ScriptContext, stats: HideStats): Promise<boolean>
 
         // Climb up stairs to level 1
         ctx.log('Climbing to first floor...');
-        const nearbyLocs = ctx.state()?.nearbyLocs ?? [];
+        const nearbyLocs = ctx.sdk.getState()?.nearbyLocs ?? [];
         ctx.log(`Nearby locs: ${nearbyLocs.slice(0, 5).map(l => l.name).join(', ')}`);
 
         const stairs1 = nearbyLocs.find(l => /staircase/i.test(l.name));
@@ -219,14 +220,14 @@ async function bankHides(ctx: ScriptContext, stats: HideStats): Promise<boolean>
     }
 
     // Check if we're on first floor (level 1), need to go to level 2
-    const midState = ctx.state();
+    const midState = ctx.sdk.getState();
     const midLevel = midState?.player?.level ?? 0;
     ctx.log(`After first climb, floor level: ${midLevel}`);
 
     if (midLevel === 1) {
         // Find stairs to climb to level 2
         ctx.log('Climbing to second floor (bank floor)...');
-        const stairs2 = ctx.state()?.nearbyLocs.find(l => /staircase/i.test(l.name));
+        const stairs2 = ctx.sdk.getState()?.nearbyLocs.find(l => /staircase/i.test(l.name));
         if (stairs2) {
             const climbOpt = stairs2.optionsWithIndex.find(o => /climb.?up/i.test(o.text));
             if (climbOpt) {
@@ -245,7 +246,7 @@ async function bankHides(ctx: ScriptContext, stats: HideStats): Promise<boolean>
     let bankOpened = false;
 
     // Try bank booth first
-    const bankBooth = ctx.state()?.nearbyLocs.find(l => /bank booth|bank chest/i.test(l.name));
+    const bankBooth = ctx.sdk.getState()?.nearbyLocs.find(l => /bank booth|bank chest/i.test(l.name));
     if (bankBooth) {
         const bankOpt = bankBooth.optionsWithIndex.find(o => /^bank$/i.test(o.text)) ||
                        bankBooth.optionsWithIndex.find(o => /use/i.test(o.text)) ||
@@ -257,7 +258,7 @@ async function bankHides(ctx: ScriptContext, stats: HideStats): Promise<boolean>
 
             // Wait for interface to open
             for (let i = 0; i < 10; i++) {
-                const state = ctx.state();
+                const state = ctx.sdk.getState();
                 if (state?.interface?.isOpen) {
                     bankOpened = true;
                     ctx.log('Bank interface opened!');
@@ -285,7 +286,7 @@ async function bankHides(ctx: ScriptContext, stats: HideStats): Promise<boolean>
 
                 // Wait for interface to open
                 for (let i = 0; i < 10; i++) {
-                    const state = ctx.state();
+                    const state = ctx.sdk.getState();
                     if (state?.interface?.isOpen) {
                         bankOpened = true;
                         ctx.log('Bank interface opened!');
@@ -307,10 +308,10 @@ async function bankHides(ctx: ScriptContext, stats: HideStats): Promise<boolean>
 
 
     // Count hides before depositing
-    const hidesBefore = ctx.state()?.inventory.filter(i => /cow\s*hide/i.test(i.name)).length ?? 0;
+    const hidesBefore = ctx.sdk.getState()?.inventory.filter(i => /cow\s*hide/i.test(i.name)).length ?? 0;
 
     // Deposit all cow hides
-    const hides = ctx.state()?.inventory.filter(i => /cow\s*hide/i.test(i.name)) ?? [];
+    const hides = ctx.sdk.getState()?.inventory.filter(i => /cow\s*hide/i.test(i.name)) ?? [];
 
     for (const hide of hides) {
         ctx.log(`Depositing ${hide.name} from slot ${hide.slot}...`);
@@ -322,7 +323,7 @@ async function bankHides(ctx: ScriptContext, stats: HideStats): Promise<boolean>
     await new Promise(r => setTimeout(r, 800));
 
     // Verify deposits worked by checking inventory
-    const hidesAfter = ctx.state()?.inventory.filter(i => /cow\s*hide/i.test(i.name)).length ?? 0;
+    const hidesAfter = ctx.sdk.getState()?.inventory.filter(i => /cow\s*hide/i.test(i.name)).length ?? 0;
     const actualDeposited = hidesBefore - hidesAfter;
 
     if (actualDeposited > 0) {
@@ -337,7 +338,7 @@ async function bankHides(ctx: ScriptContext, stats: HideStats): Promise<boolean>
     ctx.log('Returning to cow field...');
 
     // Climb down to level 1
-    const stairs = ctx.state()?.nearbyLocs.find(l => /staircase/i.test(l.name));
+    const stairs = ctx.sdk.getState()?.nearbyLocs.find(l => /staircase/i.test(l.name));
     if (stairs) {
         const downOpt = stairs.optionsWithIndex.find(o => /climb.?down/i.test(o.text));
         if (downOpt) {
@@ -347,7 +348,7 @@ async function bankHides(ctx: ScriptContext, stats: HideStats): Promise<boolean>
     }
 
     // Climb down to level 0
-    const stairs2 = ctx.state()?.nearbyLocs.find(l => /staircase/i.test(l.name));
+    const stairs2 = ctx.sdk.getState()?.nearbyLocs.find(l => /staircase/i.test(l.name));
     if (stairs2) {
         const downOpt = stairs2.optionsWithIndex.find(o => /climb.?down/i.test(o.text));
         if (downOpt) {
@@ -383,7 +384,7 @@ function logStats(ctx: ScriptContext, stats: HideStats): void {
  * Check if we should clear inventory (drop hides to make space)
  */
 function shouldDropHides(ctx: ScriptContext): boolean {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return false;
 
     // Drop hides if inventory is getting full
@@ -396,7 +397,7 @@ function shouldDropHides(ctx: ScriptContext): boolean {
 async function dropHides(ctx: ScriptContext, stats: HideStats): Promise<void> {
     ctx.log('=== Dropping hides to make space ===');
 
-    const hides = ctx.state()?.inventory.filter(i => /cow\s*hide/i.test(i.name)) ?? [];
+    const hides = ctx.sdk.getState()?.inventory.filter(i => /cow\s*hide/i.test(i.name)) ?? [];
 
     for (const hide of hides) {
         ctx.log(`Dropping ${hide.name}...`);
@@ -412,7 +413,7 @@ async function dropHides(ctx: ScriptContext, stats: HideStats): Promise<void> {
  * Main cow hide collecting loop
  */
 async function cowhideLoop(ctx: ScriptContext): Promise<void> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) throw new Error('No initial state');
 
     const stats: HideStats = {
@@ -452,7 +453,7 @@ async function cowhideLoop(ctx: ScriptContext): Promise<void> {
 
     // Main loop
     while (true) {
-        const currentState = ctx.state();
+        const currentState = ctx.sdk.getState();
         if (!currentState) {
             ctx.warn('Lost game state');
             break;
@@ -542,25 +543,36 @@ async function cowhideLoop(ctx: ScriptContext): Promise<void> {
     }
 }
 
-// Run the script
-runScript({
-    name: 'cowhide-banking',
-    goal: 'Collect and bank as many cow hides as possible in 15 minutes',
-    preset: TestPresets.LUMBRIDGE_SPAWN,
-    timeLimit: 15 * 60 * 1000,  // 15 minutes
-    stallTimeout: 60_000,       // 60 seconds (banking takes time)
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
+// Main script
+async function main() {
+    // Create fresh account
+    const username = `ch${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
+
+    // Launch browser
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
+
     try {
-        await cowhideLoop(ctx);
+        await runScript(async (ctx) => {
+            try {
+                await cowhideLoop(ctx);
+            } finally {
+                // Log final stats
+                const state = ctx.sdk.getState();
+                if (state) {
+                    ctx.log('=== Final Results ===');
+                    const hides = state.inventory.filter(i => /cow\s*hide/i.test(i.name));
+                    ctx.log(`Hides in inventory: ${hides.length}`);
+                    ctx.log(`Position: (${state.player?.worldX}, ${state.player?.worldZ})`);
+                }
+            }
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 15 * 60 * 1000,  // 15 minutes
+        });
     } finally {
-        // Log final stats
-        const state = ctx.state();
-        if (state) {
-            ctx.log('=== Final Results ===');
-            const hides = state.inventory.filter(i => /cow\s*hide/i.test(i.name));
-            ctx.log(`Hides in inventory: ${hides.length}`);
-            ctx.log(`Position: (${state.player?.worldX}, ${state.player?.worldZ})`);
-        }
+        await session.cleanup();
     }
-});
+}
+
+main().catch(console.error);

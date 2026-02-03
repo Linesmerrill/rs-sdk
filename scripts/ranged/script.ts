@@ -15,8 +15,9 @@
  * - Bronze arrows (25)
  */
 
-import { runScript, TestPresets, StallError } from '../script-runner';
-import type { ScriptContext } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 import type { NearbyNpc } from '../../sdk/types';
 
 // Training location - Lumbridge chicken coop (inside)
@@ -44,7 +45,7 @@ const MAX_PICKUP_RETRIES = 2;
  * Prioritize chickens that aren't in combat and are close.
  */
 function findBestTarget(ctx: ScriptContext): NearbyNpc | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return null;
 
     const targets = state.nearbyNpcs
@@ -71,7 +72,7 @@ function findBestTarget(ctx: ScriptContext): NearbyNpc | null {
  * Count bronze arrows in inventory + equipped
  */
 function countArrows(ctx: ScriptContext): number {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return 0;
 
     // Check inventory
@@ -91,7 +92,7 @@ function countArrows(ctx: ScriptContext): number {
  * Get current ranged level
  */
 function getRangedLevel(ctx: ScriptContext): number {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     return state?.skills.find(s => s.name === 'Ranged')?.baseLevel ?? 1;
 }
 
@@ -99,7 +100,7 @@ function getRangedLevel(ctx: ScriptContext): number {
  * Get current ranged XP
  */
 function getRangedXp(ctx: ScriptContext): number {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     return state?.skills.find(s => s.name === 'Ranged')?.experience ?? 0;
 }
 
@@ -125,7 +126,7 @@ async function waitForCombatEnd(
     while (Date.now() - startTime < maxWaitMs) {
         await new Promise(r => setTimeout(r, 400));
         loopCount++;
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (!state) return 'lost_target';
 
         // Check for dialog (level up, etc)
@@ -188,7 +189,7 @@ async function waitForCombatEnd(
  * Log current statistics
  */
 function logStats(ctx: ScriptContext, stats: RangedStats): void {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return;
 
     const ranged = state.skills.find(s => s.name === 'Ranged');
@@ -210,7 +211,7 @@ function logStats(ctx: ScriptContext, stats: RangedStats): void {
  * Main ranged training loop
  */
 async function rangedTrainingLoop(ctx: ScriptContext): Promise<void> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) throw new Error('No initial state');
 
     const now = Date.now();
@@ -270,7 +271,7 @@ async function rangedTrainingLoop(ctx: ScriptContext): Promise<void> {
     // await ctx.bot.walkTo(CHICKEN_COOP.x, CHICKEN_COOP.z);
 
     // Verify we're inside - if not, try again
-    // const pos = ctx.state();
+    // const pos = ctx.sdk.getState();
     // if (pos && (pos.player?.worldX !== CHICKEN_COOP.x || pos.player?.worldZ !== CHICKEN_COOP.z)) {
     //     ctx.log(`Not at target (${pos.player?.worldX}, ${pos.player?.worldZ}), retrying entry...`);
     //     await ctx.bot.openDoor(/gate/i);
@@ -282,7 +283,7 @@ async function rangedTrainingLoop(ctx: ScriptContext): Promise<void> {
 
     // Main training loop
     while (true) {
-        const currentState = ctx.state();
+        const currentState = ctx.sdk.getState();
         if (!currentState) {
             ctx.warn('Lost game state');
             break;
@@ -298,7 +299,7 @@ async function rangedTrainingLoop(ctx: ScriptContext): Promise<void> {
         // Check arrows remaining
         const arrowCount = countArrows(ctx);
         if (arrowCount <= 0) {
-            throw new StallError('Out of arrows!');
+            throw new Error('Out of arrows!');
         }
 
         // Dismiss any blocking dialogs (level-up, etc) - critical to check frequently!
@@ -394,7 +395,7 @@ async function rangedTrainingLoop(ctx: ScriptContext): Promise<void> {
             ctx.warn(`Attack failed: ${attackResult.message}`);
             // If timeout, check for dialog that may have appeared during attack attempt
             if (attackResult.reason === 'timeout') {
-                const s = ctx.state();
+                const s = ctx.sdk.getState();
                 if (s?.dialog.isOpen) {
                     ctx.log('Dismissing dialog that appeared during attack...');
                     await ctx.sdk.sendClickDialog(0);
@@ -426,26 +427,33 @@ async function rangedTrainingLoop(ctx: ScriptContext): Promise<void> {
     }
 }
 
-// Run the script
-runScript({
-    name: 'ranged',
-    goal: 'Train Ranged to level 10 using shortbow and bronze arrows on chickens',
-    preset: TestPresets.LUMBRIDGE_SPAWN,
-    timeLimit: 30 * 60 * 1000,  // 30 minutes
-    stallTimeout: 60_000,       // 60 seconds (ranged combat can be slower)
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
+async function main() {
+    const username = `rg${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
+
     try {
-        await rangedTrainingLoop(ctx);
+        await runScript(async (ctx) => {
+            try {
+                await rangedTrainingLoop(ctx);
+            } finally {
+                // Log final stats
+                const state = ctx.sdk.getState();
+                if (state) {
+                    const ranged = state.skills.find(s => s.name === 'Ranged');
+                    ctx.log('=== Final Results ===');
+                    ctx.log(`Ranged: Level ${ranged?.baseLevel} (${ranged?.experience} XP)`);
+                    ctx.log(`Arrows remaining: ${countArrows(ctx)}`);
+                    ctx.log(`Position: (${state.player?.worldX}, ${state.player?.worldZ})`);
+                }
+            }
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 30 * 60 * 1000,  // 30 minutes
+        });
     } finally {
-        // Log final stats
-        const state = ctx.state();
-        if (state) {
-            const ranged = state.skills.find(s => s.name === 'Ranged');
-            ctx.log('=== Final Results ===');
-            ctx.log(`Ranged: Level ${ranged?.baseLevel} (${ranged?.experience} XP)`);
-            ctx.log(`Arrows remaining: ${countArrows(ctx)}`);
-            ctx.log(`Position: (${state.player?.worldX}, ${state.player?.worldZ})`);
-        }
+        await session.cleanup();
     }
-});
+}
+
+main().catch(console.error);

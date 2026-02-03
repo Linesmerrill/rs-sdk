@@ -36,7 +36,7 @@ Cowhides are worth ~100 GP each normally, but the Lumbridge general store pays *
 
 ```typescript
 // Find shopkeeper
-const shopkeeper = ctx.state()?.nearbyNpcs.find(n => /shopkeeper/i.test(n.name));
+const shopkeeper = ctx.sdk.getState()?.nearbyNpcs.find(n => /shopkeeper/i.test(n.name));
 if (!shopkeeper) return;
 
 // Find Trade option
@@ -48,8 +48,8 @@ if (tradeOpt) {
 // Wait for shop interface
 for (let i = 0; i < 15; i++) {
     await new Promise(r => setTimeout(r, 500));
-    if (ctx.state()?.shop?.isOpen) {
-        ctx.log('Shop opened!');
+    if (ctx.sdk.getState()?.shop?.isOpen) {
+        console.log('Shop opened!');
         break;
     }
 }
@@ -59,13 +59,13 @@ for (let i = 0; i < 15; i++) {
 
 ```typescript
 // Shop must be open first
-if (!ctx.state()?.shop?.isOpen) {
-    ctx.log('Shop not open!');
+if (!ctx.sdk.getState()?.shop?.isOpen) {
+    console.log('Shop not open!');
     return;
 }
 
 // Find item to sell in inventory
-const item = ctx.state()?.inventory.find(i => /cowhide/i.test(i.name));
+const item = ctx.sdk.getState()?.inventory.find(i => /cowhide/i.test(i.name));
 if (item) {
     // Sell item (slot, quantity)
     await ctx.sdk.sendShopSell(item.slot, item.count);
@@ -77,7 +77,7 @@ if (item) {
 
 ```typescript
 // Find item in shop stock
-const shopItem = ctx.state()?.shop?.shopItems?.find(i => /sword/i.test(i.name));
+const shopItem = ctx.sdk.getState()?.shop?.shopItems?.find(i => /sword/i.test(i.name));
 if (shopItem && shopItem.count > 0) {
     await ctx.sdk.sendShopBuy(shopItem.slot, 1);
     await new Promise(r => setTimeout(r, 200));

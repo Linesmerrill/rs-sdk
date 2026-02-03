@@ -45,8 +45,8 @@ const isIdle = state.player?.animId === -1;
 ## Counting Ore
 
 ```typescript
-function countOre(ctx: ScriptContext): number {
-    const state = ctx.state();
+function countOre(ctx): number {
+    const state = ctx.sdk.getState();
     if (!state) return 0;
     return state.inventory
         .filter(i => /ore$/i.test(i.name))

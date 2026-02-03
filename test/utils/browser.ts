@@ -180,6 +180,16 @@ export interface SDKSession extends BrowserSession {
     bot: BotActions;
 }
 
+export interface LaunchOptions {
+    headless?: boolean;
+    skipTutorial?: boolean;
+    useSharedBrowser?: boolean;
+    background?: boolean;
+    usePuppeteer?: boolean;
+    /** Exit process after cleanup (default: true for CLI scripts) */
+    exitOnCleanup?: boolean;
+}
+
 /**
  * Launches a browser with the game client and waits for login.
  * Does NOT skip tutorial - use launchBotWithSDK for that.
@@ -338,13 +348,15 @@ export async function skipTutorial(sdk: BotSDK, maxAttempts: number = 30): Promi
  * @param usePuppeteer - If true, uses Puppeteer (headless capable). If false, uses native browser.
  * @param useSharedBrowser - If true, uses a shared browser instance (for load tests)
  * @param background - If true, spawns window off-screen (won't steal focus)
+ * @param exitOnCleanup - If true (default), calls process.exit(0) after cleanup to ensure Node exits
  */
 export async function launchBotWithSDK(
     botName?: string,
-    options: { headless?: boolean; skipTutorial?: boolean; useSharedBrowser?: boolean; background?: boolean; usePuppeteer?: boolean } = {}
+    options: LaunchOptions = {}
 ): Promise<SDKSession> {
     const shouldSkipTutorial = options.skipTutorial ?? true;
     const usePuppeteer = options.usePuppeteer ?? false;
+    const exitOnCleanup = options.exitOnCleanup ?? true;  // Default true for CLI scripts
 
     if (usePuppeteer) {
         // Puppeteer mode (for CI/headless)
@@ -379,6 +391,9 @@ export async function launchBotWithSDK(
             cleanup: async () => {
                 await sdk.disconnect();
                 await browser.cleanup();
+                if (exitOnCleanup) {
+                    process.exit(0);
+                }
             }
         };
     }
@@ -422,6 +437,9 @@ export async function launchBotWithSDK(
         cleanup: async () => {
             await sdk.disconnect();
             // Native browser stays open - user can close it manually
+            if (exitOnCleanup) {
+                process.exit(0);
+            }
         }
     };
 }

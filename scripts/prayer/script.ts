@@ -14,8 +14,9 @@
  * Bones needed: ~257 bones (1154 / 4.5)
  */
 
-import { runScript, TestPresets, StallError } from '../script-runner';
-import type { ScriptContext } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 import type { NearbyNpc } from '../../sdk/types';
 
 // Chicken coop is east of Lumbridge castle, near the farm
@@ -24,7 +25,7 @@ const CHICKEN_COOP_ENTRANCE = { x: 3237, z: 3295 };  // Just outside gate
 const CHICKEN_COOP_INSIDE = { x: 3232, z: 3295 };    // Inside the coop
 
 // Prayer level goal
-const TARGET_PRAYER_LEVEL = 10;
+const TARGET_PRAYER_LEVEL = 5;
 
 // Stats tracking
 interface PrayerStats {
@@ -40,7 +41,7 @@ interface PrayerStats {
  * Prioritizes chickens not in combat and closest to player.
  */
 function findBestChicken(ctx: ScriptContext): NearbyNpc | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return null;
 
     const chickens = state.nearbyNpcs
@@ -77,7 +78,7 @@ async function waitForCombatEnd(
 
     while (Date.now() - startTime < maxWaitMs) {
         await new Promise(r => setTimeout(r, 300));
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (!state) return 'lost_target';
 
         // Dismiss any level-up dialogs
@@ -110,7 +111,7 @@ async function waitForCombatEnd(
  * Dismiss any open dialog (level-up, etc.)
  */
 async function dismissDialog(ctx: ScriptContext): Promise<boolean> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (state?.dialog.isOpen) {
         await ctx.sdk.sendClickDialog(0);
         await new Promise(r => setTimeout(r, 300));
@@ -133,7 +134,7 @@ async function buryAllBones(ctx: ScriptContext, stats: PrayerStats): Promise<voi
     let bones = inventory.filter(i => /^bones$/i.test(i.name));
 
     for (const bone of bones) {
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (!state) break;
 
         // Dismiss any dialogs that appeared (level-up, etc.)
@@ -159,7 +160,7 @@ async function buryAllBones(ctx: ScriptContext, stats: PrayerStats): Promise<voi
 
             // Log progress periodically
             if (stats.bonesBuried % 10 === 0) {
-                const prayerSkill = ctx.state()?.skills.find(s => s.name === 'Prayer');
+                const prayerSkill = ctx.sdk.getState()?.skills.find(s => s.name === 'Prayer');
                 ctx.log(`Buried ${stats.bonesBuried} bones - Prayer: Level ${prayerSkill?.baseLevel} (${prayerSkill?.experience} XP)`);
             }
         }
@@ -170,7 +171,7 @@ async function buryAllBones(ctx: ScriptContext, stats: PrayerStats): Promise<voi
  * Main prayer training loop
  */
 async function prayerTrainingLoop(ctx: ScriptContext): Promise<void> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) throw new Error('No initial state');
 
     const prayerSkill = state.skills.find(s => s.name === 'Prayer');
@@ -222,7 +223,7 @@ async function prayerTrainingLoop(ctx: ScriptContext): Promise<void> {
 
     // Main loop
     while (true) {
-        const currentState = ctx.state();
+        const currentState = ctx.sdk.getState();
         if (!currentState) {
             ctx.warn('Lost game state');
             break;
@@ -238,7 +239,7 @@ async function prayerTrainingLoop(ctx: ScriptContext): Promise<void> {
         // Dismiss any dialogs (level-up, etc.) - click multiple times to clear multi-page dialogs
         if (currentState.dialog.isOpen) {
             for (let i = 0; i < 3; i++) {
-                const s = ctx.state();
+                const s = ctx.sdk.getState();
                 if (!s?.dialog.isOpen) break;
                 await ctx.sdk.sendClickDialog(0);
                 await new Promise(r => setTimeout(r, 300));
@@ -299,29 +300,32 @@ async function prayerTrainingLoop(ctx: ScriptContext): Promise<void> {
     }
 }
 
-// Run the script
-runScript({
-    name: 'prayer',
-    goal: `Train Prayer to level ${TARGET_PRAYER_LEVEL} by killing chickens and burying bones`,
-    preset: TestPresets.LUMBRIDGE_SPAWN,
-    timeLimit: 3 * 60 * 1000,  // 3 minutes for testing
-    stallTimeout: 60_000,       // 60 seconds
-    launchOptions: {
-        usePuppeteer: true,
-        useSharedBrowser: false,  // Use dedicated browser to avoid congestion
-        headless: false
-    }
-}, async (ctx) => {
+async function main() {
+    const username = `pr${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
+
     try {
-        await prayerTrainingLoop(ctx);
+        await runScript(async (ctx) => {
+            try {
+                await prayerTrainingLoop(ctx);
+            } finally {
+                // Log final stats
+                const state = ctx.sdk.getState();
+                if (state) {
+                    const prayer = state.skills.find(s => s.name === 'Prayer');
+                    ctx.log('=== Final Results ===');
+                    ctx.log(`Prayer: Level ${prayer?.baseLevel ?? '?'} (${prayer?.experience ?? '?'} XP)`);
+                    ctx.log(`Position: (${state.player?.worldX}, ${state.player?.worldZ})`);
+                }
+            }
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 3 * 60 * 1000,  // 3 minutes for testing
+        });
     } finally {
-        // Log final stats
-        const state = ctx.state();
-        if (state) {
-            const prayer = state.skills.find(s => s.name === 'Prayer');
-            ctx.log('=== Final Results ===');
-            ctx.log(`Prayer: Level ${prayer?.baseLevel ?? '?'} (${prayer?.experience ?? '?'} XP)`);
-            ctx.log(`Position: (${state.player?.worldX}, ${state.player?.worldZ})`);
-        }
+        await session.cleanup();
     }
-});
+}
+
+main().catch(console.error);

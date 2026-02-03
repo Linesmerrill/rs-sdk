@@ -30,7 +30,7 @@ async function walkWaypoints(ctx, waypoints) {
             await ctx.bot.walkTo(wp.x, wp.z);
             await new Promise(r => setTimeout(r, 500));
 
-            const player = ctx.state()?.player;
+            const player = ctx.sdk.getState()?.player;
             const dist = Math.sqrt(
                 Math.pow(player.worldX - wp.x, 2) +
                 Math.pow(player.worldZ - wp.z, 2)
@@ -38,7 +38,6 @@ async function walkWaypoints(ctx, waypoints) {
 
             if (dist <= 5) break;  // Close enough
         }
-        ctx.progress();
     }
 }
 ```
@@ -50,14 +49,14 @@ Always check if you actually arrived:
 ```typescript
 const result = await ctx.bot.walkTo(targetX, targetZ);
 
-const player = ctx.state()?.player;
+const player = ctx.sdk.getState()?.player;
 const dist = Math.sqrt(
     Math.pow(player.worldX - targetX, 2) +
     Math.pow(player.worldZ - targetZ, 2)
 );
 
 if (dist > 5) {
-    ctx.warn(`Walk failed: still ${dist.toFixed(0)} tiles away`);
+    console.warn(`Walk failed: still ${dist.toFixed(0)} tiles away`);
 }
 ```
 
@@ -150,8 +149,8 @@ await ctx.bot.walkTo(3092, 3243);  // May path through (3220, 3220)
 ```typescript
 // Simple check: x >= 3270 means inside Al Kharid
 // BUT note the bank is at x=3269, so use x >= 3267 for safety
-function isInAlKharid(ctx: ScriptContext): boolean {
-    const player = ctx.state()?.player;
+function isInAlKharid(ctx): boolean {
+    const player = ctx.sdk.getState()?.player;
     if (!player) return false;
     return player.worldX >= 3267 && player.worldZ < 3220;
 }

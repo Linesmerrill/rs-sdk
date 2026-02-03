@@ -14,7 +14,9 @@
  * This avoids the dangerous Dark Wizard area near Draynor.
  */
 
-import { runScript, type ScriptContext, StallError, TestPresets } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 import type { NearbyNpc, NearbyLoc, InventoryItem } from '../../sdk/types';
 
 // Key locations
@@ -37,18 +39,16 @@ interface Stats {
 
 // ============ Helper Functions ============
 
-// Note: ctx.progress() removed - bot actions and movement auto-reset stall timer
-
 function getCookingXp(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Cooking')?.experience ?? 0;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Cooking')?.experience ?? 0;
 }
 
 function getCookingLevel(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Cooking')?.baseLevel ?? 1;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Cooking')?.baseLevel ?? 1;
 }
 
 function getPlayerPos(ctx: ScriptContext): { x: number; z: number } | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state?.player) return null;
     return { x: state.player.worldX, z: state.player.worldZ };
 }
@@ -63,7 +63,7 @@ function distanceTo(ctx: ScriptContext, target: { x: number; z: number }): numbe
  * Find the nearest fishing spot with Net option
  */
 function findFishingSpot(ctx: ScriptContext): NearbyNpc | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return null;
 
     // Find any fishing spot with "Net" option
@@ -79,7 +79,7 @@ function findFishingSpot(ctx: ScriptContext): NearbyNpc | null {
  * Count raw fish in inventory
  */
 function countRawFish(ctx: ScriptContext): number {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return 0;
 
     return state.inventory
@@ -91,7 +91,7 @@ function countRawFish(ctx: ScriptContext): number {
  * Get all raw fish items in inventory
  */
 function getRawFishItems(ctx: ScriptContext): InventoryItem[] {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return [];
 
     return state.inventory.filter(item => /^raw\s/i.test(item.name));
@@ -101,7 +101,7 @@ function getRawFishItems(ctx: ScriptContext): InventoryItem[] {
  * Get available slots (keeping essential items: net, tinderbox, axe)
  */
 function getAvailableSlots(ctx: ScriptContext): number {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return 0;
     return 28 - state.inventory.length;
 }
@@ -110,7 +110,7 @@ function getAvailableSlots(ctx: ScriptContext): number {
  * Get current HP
  */
 function getCurrentHp(ctx: ScriptContext): number {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return 10;
     return state.skills.find(s => s.name === 'Hitpoints')?.level ?? 10;
 }
@@ -119,7 +119,7 @@ function getCurrentHp(ctx: ScriptContext): number {
  * Eat food if HP is low, or run away if no food
  */
 async function eatIfLowHp(ctx: ScriptContext, stats: Stats): Promise<boolean> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return false;
 
     // Get current HP from Hitpoints skill level (it reflects current HP, not just max)
@@ -141,7 +141,6 @@ async function eatIfLowHp(ctx: ScriptContext, stats: Stats): Promise<boolean> {
             // Run north towards bank (safer area)
             await ctx.sdk.sendWalk(LOCATIONS.ALKHARID_RANGE.x, LOCATIONS.ALKHARID_RANGE.z, true);
             await new Promise(r => setTimeout(r, 2000));
-            // progress auto-tracked
         }
         return false;
     }
@@ -149,7 +148,6 @@ async function eatIfLowHp(ctx: ScriptContext, stats: Stats): Promise<boolean> {
     ctx.log(`HP low (${hp}), eating ${food.name}`);
     await ctx.sdk.sendUseItem(food.slot, 1);  // Option 1 = "Eat"
     await new Promise(r => setTimeout(r, 500));
-    // progress auto-tracked
     return true;
 }
 
@@ -158,11 +156,10 @@ async function eatIfLowHp(ctx: ScriptContext, stats: Stats): Promise<boolean> {
  */
 async function dismissDialogs(ctx: ScriptContext, stats: Stats, maxCount: number = 3): Promise<number> {
     let dismissed = 0;
-    while (ctx.state()?.dialog.isOpen && dismissed < maxCount) {
+    while (ctx.sdk.getState()?.dialog.isOpen && dismissed < maxCount) {
         await ctx.sdk.sendClickDialog(0);
         await new Promise(r => setTimeout(r, 200));
         dismissed++;
-        // progress auto-tracked
     }
     return dismissed;
 }
@@ -173,7 +170,6 @@ async function dismissDialogs(ctx: ScriptContext, stats: Stats, maxCount: number
 async function walkToPosition(ctx: ScriptContext, stats: Stats, target: { x: number; z: number }, name: string): Promise<boolean> {
     const startDist = distanceTo(ctx, target);
     ctx.log(`Walking to ${name} (${target.x}, ${target.z}), dist: ${startDist}...`);
-    // progress auto-tracked
 
     // Use pathfinding for long distances - retry up to 3 times
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -190,7 +186,6 @@ async function walkToPosition(ctx: ScriptContext, stats: Stats, target: { x: num
             } catch (e) {
                 ctx.warn(`Pathfinding error: ${e}`);
             }
-            // progress auto-tracked
         }
     }
 
@@ -208,7 +203,6 @@ async function walkToPosition(ctx: ScriptContext, stats: Stats, target: { x: num
     // Wait to arrive
     for (let i = 0; i < 100; i++) {
         await new Promise(r => setTimeout(r, 400));
-        // progress auto-tracked
 
         await dismissDialogs(ctx, stats, 1);
 
@@ -235,14 +229,14 @@ async function walkToPosition(ctx: ScriptContext, stats: Stats, target: { x: num
  */
 async function sellShortbowForCoins(ctx: ScriptContext, stats: Stats): Promise<boolean> {
     // Check if we already have coins
-    const coins = ctx.state()?.inventory.find(i => /coins/i.test(i.name));
+    const coins = ctx.sdk.getState()?.inventory.find(i => /coins/i.test(i.name));
     if (coins && coins.count >= 10) {
         ctx.log(`Already have ${coins.count} coins`);
         return true;
     }
 
     // Check if we have shortbow to sell
-    const shortbow = ctx.state()?.inventory.find(i => /shortbow/i.test(i.name));
+    const shortbow = ctx.sdk.getState()?.inventory.find(i => /shortbow/i.test(i.name));
     if (!shortbow) {
         ctx.warn('No shortbow to sell');
         return false;
@@ -261,7 +255,6 @@ async function sellShortbowForCoins(ctx: ScriptContext, stats: Stats): Promise<b
         ctx.warn(`Failed to open shop: ${result.message}`);
         return false;
     }
-    // progress auto-tracked
 
     // Sell shortbow
     ctx.log('Selling shortbow...');
@@ -269,13 +262,12 @@ async function sellShortbowForCoins(ctx: ScriptContext, stats: Stats): Promise<b
     if (!sellResult.success) {
         ctx.warn(`Failed to sell shortbow: ${sellResult.message}`);
     }
-    // progress auto-tracked
 
     // Close shop
     await ctx.bot.closeShop();
     await new Promise(r => setTimeout(r, 500));
 
-    const newCoins = ctx.state()?.inventory.find(i => /coins/i.test(i.name));
+    const newCoins = ctx.sdk.getState()?.inventory.find(i => /coins/i.test(i.name));
     ctx.log(`Now have ${newCoins?.count ?? 0} coins`);
     return (newCoins?.count ?? 0) >= 10;
 }
@@ -298,7 +290,7 @@ async function passThruTollGate(ctx: ScriptContext, stats: Stats): Promise<boole
     }
 
     // Find and interact with gate
-    const gate = ctx.state()?.nearbyLocs.find(l => /gate/i.test(l.name));
+    const gate = ctx.sdk.getState()?.nearbyLocs.find(l => /gate/i.test(l.name));
     if (!gate) {
         ctx.warn('Gate not found');
         return false;
@@ -313,11 +305,10 @@ async function passThruTollGate(ctx: ScriptContext, stats: Stats): Promise<boole
     ctx.log('Opening toll gate...');
     await ctx.sdk.sendInteractLoc(gate.x, gate.z, gate.id, openOpt.opIndex);
     await new Promise(r => setTimeout(r, 1000));
-    // progress auto-tracked
 
     // Handle dialog - click through until "Yes" option appears
     for (let i = 0; i < 20; i++) {
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (!state?.dialog.isOpen) {
             // Check if we're already through
             const pos = getPlayerPos(ctx);
@@ -334,12 +325,10 @@ async function passThruTollGate(ctx: ScriptContext, stats: Stats): Promise<boole
             ctx.log('Paying toll...');
             await ctx.sdk.sendClickDialog(yesOpt.index);
             await new Promise(r => setTimeout(r, 500));
-            // progress auto-tracked
             continue;  // Keep checking dialog/position
         }
         await ctx.sdk.sendClickDialog(0);
         await new Promise(r => setTimeout(r, 200));
-        // progress auto-tracked
     }
 
     // Wait and walk through repeatedly
@@ -353,7 +342,7 @@ async function passThruTollGate(ctx: ScriptContext, stats: Stats): Promise<boole
         }
 
         // Dismiss any remaining dialogs
-        if (ctx.state()?.dialog.isOpen) {
+        if (ctx.sdk.getState()?.dialog.isOpen) {
             await ctx.sdk.sendClickDialog(0);
             await new Promise(r => setTimeout(r, 300));
         }
@@ -361,7 +350,6 @@ async function passThruTollGate(ctx: ScriptContext, stats: Stats): Promise<boole
         // Try to walk through
         await ctx.sdk.sendWalk(3277, 3227, true);  // Inside Al-Kharid
         await new Promise(r => setTimeout(r, 1500));
-        // progress auto-tracked
     }
 
     ctx.warn('Failed to pass through toll gate');
@@ -372,7 +360,7 @@ async function passThruTollGate(ctx: ScriptContext, stats: Stats): Promise<boole
  * Phase 0c: Drop non-essential items to make room for fish
  */
 async function dropNonEssentials(ctx: ScriptContext, stats: Stats): Promise<void> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return;
 
     // Keep: fishing net, coins (for kebabs if needed)
@@ -392,11 +380,10 @@ async function dropNonEssentials(ctx: ScriptContext, stats: Stats): Promise<void
     ctx.log(`Dropping ${itemsToDrop.length} non-essential items...`);
     for (const item of itemsToDrop) {
         await ctx.sdk.sendDropItem(item.slot);
-        // progress auto-tracked
         await new Promise(r => setTimeout(r, 100));
     }
 
-    ctx.log(`Inventory now has ${ctx.state()?.inventory.length ?? 0} items, ${getAvailableSlots(ctx)} slots free`);
+    ctx.log(`Inventory now has ${ctx.sdk.getState()?.inventory.length ?? 0} items, ${getAvailableSlots(ctx)} slots free`);
 }
 
 /**
@@ -422,7 +409,6 @@ async function fishUntilFull(ctx: ScriptContext, stats: Stats): Promise<void> {
             if (currentFish % 5 === 0) {
                 ctx.log(`Fish caught: ${stats.fishCaught} (${getAvailableSlots(ctx)} slots free)`);
             }
-            // progress auto-tracked
             noSpotCount = 0;
         }
         lastFishCount = currentFish;
@@ -449,15 +435,15 @@ async function fishUntilFull(ctx: ScriptContext, stats: Stats): Promise<void> {
                             return;  // Exit fishing phase, will proceed to cooking
                         }
                         // Check if we have coins for toll
-                        const coins = ctx.state()?.inventory.find(i => /coins/i.test(i.name));
+                        const coins = ctx.sdk.getState()?.inventory.find(i => /coins/i.test(i.name));
                         if (!coins || coins.count < 10) {
                             ctx.log('No coins for toll, cannot re-enter Al-Kharid');
-                            throw new StallError('Respawned without coins, cannot continue');
+                            throw new Error('Respawned without coins, cannot continue');
                         }
                         // Pass through toll gate
                         const passedToll = await passThruTollGate(ctx, stats);
                         if (!passedToll) {
-                            throw new StallError('Could not re-enter Al-Kharid after respawn');
+                            throw new Error('Could not re-enter Al-Kharid after respawn');
                         }
                     }
 
@@ -477,7 +463,6 @@ async function fishUntilFull(ctx: ScriptContext, stats: Stats): Promise<void> {
                 );
                 await new Promise(r => setTimeout(r, 1500));
                 noSpotCount = 0;
-                // progress auto-tracked
             }
 
             await new Promise(r => setTimeout(r, 100));
@@ -492,7 +477,6 @@ async function fishUntilFull(ctx: ScriptContext, stats: Stats): Promise<void> {
         }
 
         await ctx.sdk.sendInteractNpc(spot.index, netOpt.opIndex);
-        // progress auto-tracked
         await new Promise(r => setTimeout(r, 200));
     }
 
@@ -513,10 +497,10 @@ async function cookAllFish(ctx: ScriptContext, stats: Stats): Promise<void> {
     ctx.log('Cooking fish at range...');
 
     // Find the range
-    const range = ctx.state()?.nearbyLocs.find(loc => /range|stove/i.test(loc.name));
+    const range = ctx.sdk.getState()?.nearbyLocs.find(loc => /range|stove/i.test(loc.name));
     if (!range) {
         ctx.warn('No range found nearby');
-        const locs = ctx.state()?.nearbyLocs.slice(0, 10) ?? [];
+        const locs = ctx.sdk.getState()?.nearbyLocs.slice(0, 10) ?? [];
         ctx.log(`Nearby locs: ${locs.map(l => l.name).join(', ')}`);
         return;
     }
@@ -535,14 +519,12 @@ async function cookAllFish(ctx: ScriptContext, stats: Stats): Promise<void> {
 
         // Use fish on range
         await ctx.sdk.sendUseItemOnLoc(rawFish.slot, range.x, range.z, range.id);
-        // progress auto-tracked
 
         // Wait for cooking interface or direct cooking
         for (let i = 0; i < 15; i++) {
             await new Promise(r => setTimeout(r, 300));
-            // progress auto-tracked
 
-            const state = ctx.state();
+            const state = ctx.sdk.getState();
 
             // Handle cooking interface if it appears
             const firstInterfaceOpt = state?.interface?.options[0];
@@ -553,7 +535,6 @@ async function cookAllFish(ctx: ScriptContext, stats: Stats): Promise<void> {
                 let noChange = 0;
                 while (noChange < 15 && countRawFish(ctx) > 0) {
                     await new Promise(r => setTimeout(r, 400));
-                    // progress auto-tracked
                     await dismissDialogs(ctx, stats, 1);
                     const prev = countRawFish(ctx);
                     await new Promise(r => setTimeout(r, 200));
@@ -588,7 +569,7 @@ async function cookAllFish(ctx: ScriptContext, stats: Stats): Promise<void> {
  * Phase 3: Drop all cooked and burnt fish
  */
 async function dropAllFish(ctx: ScriptContext, stats: Stats): Promise<void> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return;
 
     // Drop everything except fishing net
@@ -605,7 +586,6 @@ async function dropAllFish(ctx: ScriptContext, stats: Stats): Promise<void> {
     ctx.log(`Dropping ${itemsToDrop.length} items...`);
     for (const item of itemsToDrop) {
         await ctx.sdk.sendDropItem(item.slot);
-        // progress auto-tracked
         await new Promise(r => setTimeout(r, 100));
     }
 }
@@ -614,7 +594,7 @@ async function dropAllFish(ctx: ScriptContext, stats: Stats): Promise<void> {
  * Log final statistics
  */
 function logFinalStats(ctx: ScriptContext, stats: Stats) {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     const cooking = state?.skills.find(s => s.name === 'Cooking');
 
     const cookingXpGained = (cooking?.experience ?? 0) - stats.startCookingXp;
@@ -640,22 +620,21 @@ async function mainLoop(ctx: ScriptContext, stats: Stats): Promise<void> {
     ctx.log('=== Cooking Trainer (v3 - Al-Kharid) ===');
     ctx.log(`Goal: Reach Cooking level ${GOAL_LEVEL}`);
     ctx.log(`Starting level: ${getCookingLevel(ctx)}`);
-    ctx.log(`Position: (${ctx.state()?.player?.worldX}, ${ctx.state()?.player?.worldZ})`);
-    ctx.log(`Inventory: ${ctx.state()?.inventory.length ?? 0} items`);
+    ctx.log(`Position: (${ctx.sdk.getState()?.player?.worldX}, ${ctx.sdk.getState()?.player?.worldZ})`);
+    ctx.log(`Inventory: ${ctx.sdk.getState()?.inventory.length ?? 0} items`);
 
     await ctx.bot.dismissBlockingUI();
-    // progress auto-tracked
 
     // Phase 0a: Sell shortbow for coins
     const gotCoins = await sellShortbowForCoins(ctx, stats);
     if (!gotCoins) {
-        throw new StallError('Could not get coins for toll');
+        throw new Error('Could not get coins for toll');
     }
 
     // Phase 0b: Pass through toll gate to Al-Kharid
     const enteredAlKharid = await passThruTollGate(ctx, stats);
     if (!enteredAlKharid) {
-        throw new StallError('Could not enter Al-Kharid');
+        throw new Error('Could not enter Al-Kharid');
     }
 
     // Phase 0c: Drop non-essential items
@@ -664,7 +643,7 @@ async function mainLoop(ctx: ScriptContext, stats: Stats): Promise<void> {
     // Walk to Al-Kharid fishing spot
     ctx.log('Walking to Al-Kharid fishing spot...');
     if (!await walkToPosition(ctx, stats, LOCATIONS.ALKHARID_FISHING, 'Al-Kharid fishing')) {
-        throw new StallError('Could not reach Al-Kharid fishing spot');
+        throw new Error('Could not reach Al-Kharid fishing spot');
     }
 
     while (getCookingLevel(ctx) < GOAL_LEVEL) {
@@ -683,42 +662,46 @@ async function mainLoop(ctx: ScriptContext, stats: Stats): Promise<void> {
         // Walk back to fishing spot
         ctx.log('Returning to fishing spot...');
         await walkToPosition(ctx, stats, LOCATIONS.ALKHARID_FISHING, 'Al-Kharid fishing');
-
-        // progress auto-tracked
     }
 
     ctx.log(`\nGoal achieved! Cooking level ${getCookingLevel(ctx)}`);
 }
 
-// Run the script
-runScript({
-    name: 'cooking',
-    goal: 'Train Cooking from level 1 to 10+',
-    preset: TestPresets.LUMBRIDGE_SPAWN,
-    timeLimit: 15 * 60 * 1000,      // 15 minutes
-    stallTimeout: 45_000,           // 45 seconds (walking long distances)
-    screenshotInterval: 30_000,
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
-    const stats: Stats = {
-        fishCaught: 0,
-        fishCooked: 0,
-        fishBurnt: 0,
-        cycles: 0,
-        startCookingXp: getCookingXp(ctx),
-        startTime: Date.now(),
-        lastProgressTime: Date.now(),
-    };
+async function main() {
+    // Create fresh account
+    const username = `CK${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
+
+    // Launch browser
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
 
     try {
-        await mainLoop(ctx, stats);
-    } catch (e) {
-        if (e instanceof StallError) {
-            ctx.error(`Script aborted: ${e.message}`);
-        } else {
-            throw e;
-        }
+        await runScript(async (ctx) => {
+            const stats: Stats = {
+                fishCaught: 0,
+                fishCooked: 0,
+                fishBurnt: 0,
+                cycles: 0,
+                startCookingXp: getCookingXp(ctx),
+                startTime: Date.now(),
+                lastProgressTime: Date.now(),
+            };
+
+            try {
+                await mainLoop(ctx, stats);
+            } catch (e) {
+                ctx.error(`Script aborted: ${e}`);
+                throw e;
+            } finally {
+                logFinalStats(ctx, stats);
+            }
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 15 * 60 * 1000,
+        });
     } finally {
-        logFinalStats(ctx, stats);
+        await session.cleanup();
     }
-});
+}
+
+main().catch(console.error);

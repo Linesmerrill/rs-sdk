@@ -7,8 +7,9 @@
  * Route goes through the cow field area and up to Varrock.
  */
 
-import { runScript, TestPresets } from '../script-runner';
-import type { ScriptContext } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 
 // Varrock West Bank area (ground floor, reliable destination)
 const VARROCK = { x: 3185, z: 3436 };
@@ -34,7 +35,7 @@ const FINAL_TOLERANCE = 10;
  * Check if we've reached Varrock (north of z=3400)
  */
 function isInVarrock(ctx: ScriptContext): boolean {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state?.player) return false;
     return state.player.worldZ >= 3400;
 }
@@ -43,7 +44,7 @@ function isInVarrock(ctx: ScriptContext): boolean {
  * Get distance between player and a point
  */
 function distanceTo(ctx: ScriptContext, x: number, z: number): number {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state?.player) return Infinity;
     const dx = x - state.player.worldX;
     const dz = z - state.player.worldZ;
@@ -95,7 +96,7 @@ async function walkToWaypoint(
  * Main travel function using waypoints
  */
 async function travelToVarrock(ctx: ScriptContext): Promise<void> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state?.player) throw new Error('No initial state');
 
     const startX = state.player.worldX;
@@ -129,7 +130,7 @@ async function travelToVarrock(ctx: ScriptContext): Promise<void> {
 
         if (!success && !isInVarrock(ctx)) {
             // Log position and continue trying
-            const pos = ctx.state()?.player;
+            const pos = ctx.sdk.getState()?.player;
             ctx.warn(`Stuck at (${pos?.worldX}, ${pos?.worldZ}) - trying next waypoint`);
         }
 
@@ -141,7 +142,7 @@ async function travelToVarrock(ctx: ScriptContext): Promise<void> {
     }
 
     const elapsed = (Date.now() - startTime) / 1000;
-    const endState = ctx.state();
+    const endState = ctx.sdk.getState();
     const endX = endState?.player?.worldX ?? 0;
     const endZ = endState?.player?.worldZ ?? 0;
     const finalDist = distanceTo(ctx, VARROCK.x, VARROCK.z);
@@ -158,13 +159,21 @@ async function travelToVarrock(ctx: ScriptContext): Promise<void> {
 }
 
 // Run the script
-runScript({
-    name: 'varrock-travel',
-    goal: 'Navigate from Lumbridge to Varrock using walkTo()',
-    preset: TestPresets.LUMBRIDGE_SPAWN,
-    timeLimit: 3 * 60 * 1000,  // 3 minutes
-    stallTimeout: 60_000,       // 60s - walkTo can take time on long paths
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
-    await travelToVarrock(ctx);
-});
+async function main() {
+    const username = `vt${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
+
+    try {
+        await runScript(async (ctx) => {
+            await travelToVarrock(ctx);
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 3 * 60 * 1000,  // 3 minutes
+        });
+    } finally {
+        await session.cleanup();
+    }
+}
+
+main().catch(console.error);

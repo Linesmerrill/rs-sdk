@@ -16,7 +16,9 @@
  * - Better copper/tin detection by checking specific rock locations
  */
 
-import { runScript, TestPresets, type ScriptContext } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 
 // Locations
 const LUMBRIDGE_SHOP = { x: 3211, z: 3247 };
@@ -41,7 +43,7 @@ const WAYPOINTS_TO_MINE = [
 
 // Get smithing stats
 function getSmithingStats(ctx: ScriptContext): { level: number; xp: number } {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     const smithing = state?.skills.find(s => s.name === 'Smithing');
     return {
         level: smithing?.baseLevel ?? 1,
@@ -57,13 +59,13 @@ function getCoins(ctx: ScriptContext): number {
 
 // Check if inside Al Kharid
 function isInsideAlKharid(ctx: ScriptContext): boolean {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     return (state?.player?.worldX ?? 0) >= 3270;
 }
 
 // Count ore in inventory
 function countOre(ctx: ScriptContext): { copper: number; tin: number; bronzeBars: number } {
-    const inv = ctx.state()?.inventory ?? [];
+    const inv = ctx.sdk.getState()?.inventory ?? [];
     return {
         copper: inv.filter(i => /copper ore/i.test(i.name)).reduce((sum, i) => sum + i.count, 0),
         tin: inv.filter(i => /tin ore/i.test(i.name)).reduce((sum, i) => sum + i.count, 0),
@@ -101,7 +103,7 @@ async function getCoinsFromShop(ctx: ScriptContext): Promise<boolean> {
 async function walkToMine(ctx: ScriptContext): Promise<void> {
     ctx.log('Walking to SE Varrock mine...');
 
-    const currentPos = ctx.state()?.player;
+    const currentPos = ctx.sdk.getState()?.player;
     ctx.log(`From (${currentPos?.worldX}, ${currentPos?.worldZ}) to (${SE_VARROCK_MINE_COPPERTIN.x}, ${SE_VARROCK_MINE_COPPERTIN.z})`);
 
     // Try direct walk to mine
@@ -121,13 +123,13 @@ async function walkToMine(ctx: ScriptContext): Promise<void> {
 
 
     // Dismiss any dialogs
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (state?.dialog.isOpen) {
         await ctx.sdk.sendClickDialog(0);
         await new Promise(r => setTimeout(r, 300));
     }
 
-    const pos = ctx.state()?.player;
+    const pos = ctx.sdk.getState()?.player;
     ctx.log(`At mine: (${pos?.worldX}, ${pos?.worldZ})`);
 }
 
@@ -136,7 +138,7 @@ async function prospectRock(ctx: ScriptContext, rock: { x: number; z: number; id
     const prospectOpt = rock.optionsWithIndex.find(o => /prospect/i.test(o.text));
     if (!prospectOpt) return null;
 
-    const startTick = ctx.state()?.tick ?? 0;
+    const startTick = ctx.sdk.getState()?.tick ?? 0;
 
     await ctx.sdk.sendInteractLoc(rock.x, rock.z, rock.id, prospectOpt.opIndex);
     await new Promise(r => setTimeout(r, 800));  // Brief wait for action
@@ -175,7 +177,7 @@ async function prospectRock(ctx: ScriptContext, rock: { x: number; z: number; id
 // Find and mine a rock (copper or tin)
 // Use prospecting to filter out iron/gold, but don't try to balance
 async function mineRock(ctx: ScriptContext): Promise<boolean> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return false;
 
     // Dismiss dialogs first
@@ -199,7 +201,7 @@ async function mineRock(ctx: ScriptContext): Promise<boolean> {
     for (const rock of rocks.slice(0, 5)) {
         // Prospect to check ore type
         const oreType = await prospectRock(ctx, rock);
-    
+
         // Skip non-copper/tin or empty rocks
         if (!oreType || oreType === 'empty') continue;
         if (oreType !== 'copper' && oreType !== 'tin') {
@@ -211,8 +213,8 @@ async function mineRock(ctx: ScriptContext): Promise<boolean> {
         const mineOpt = rock.optionsWithIndex.find(o => /mine/i.test(o.text));
         if (!mineOpt) continue;
 
-        const xpBefore = ctx.state()?.skills.find(s => s.name === 'Mining')?.experience ?? 0;
-        const invCountBefore = ctx.state()?.inventory.length ?? 0;
+        const xpBefore = ctx.sdk.getState()?.skills.find(s => s.name === 'Mining')?.experience ?? 0;
+        const invCountBefore = ctx.sdk.getState()?.inventory.length ?? 0;
 
         ctx.log(`Mining ${oreType} at (${rock.x}, ${rock.z})...`);
         await ctx.sdk.sendInteractLoc(rock.x, rock.z, rock.id, mineOpt.opIndex);
@@ -257,7 +259,7 @@ async function mineOre(ctx: ScriptContext, targetPairs: number): Promise<void> {
         }
 
         // Check inventory space
-        const invCount = ctx.state()?.inventory.length ?? 0;
+        const invCount = ctx.sdk.getState()?.inventory.length ?? 0;
         if (invCount >= 26) {  // Leave some space
             ctx.log('Inventory nearly full');
             break;
@@ -275,7 +277,7 @@ async function mineOre(ctx: ScriptContext, targetPairs: number): Promise<void> {
             ctx.log(`Mining failed (${consecutiveFails}/5)`);
 
             // Walk around to find rocks
-            const currentPos = ctx.state()?.player;
+            const currentPos = ctx.sdk.getState()?.player;
             if (currentPos) {
                 const offsetX = (Math.random() - 0.5) * 15;
                 const offsetZ = (Math.random() - 0.5) * 15;
@@ -303,7 +305,7 @@ async function enterAlKharid(ctx: ScriptContext): Promise<boolean> {
     await ctx.bot.walkTo(AL_KHARID_GATE.x, AL_KHARID_GATE.z);
 
     // Find and interact with gate
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     const gate = state?.nearbyLocs.find(l => /gate/i.test(l.name) && l.distance < 10);
 
     if (!gate) {
@@ -323,7 +325,7 @@ async function enterAlKharid(ctx: ScriptContext): Promise<boolean> {
 
     // Handle dialog - pay toll
     for (let i = 0; i < 20; i++) {
-        const s = ctx.state();
+        const s = ctx.sdk.getState();
         if (!s?.dialog.isOpen) {
             await new Promise(r => setTimeout(r, 150));
             continue;
@@ -344,7 +346,7 @@ async function enterAlKharid(ctx: ScriptContext): Promise<boolean> {
 
     // Dismiss remaining dialogs
     for (let i = 0; i < 5; i++) {
-        const s = ctx.state();
+        const s = ctx.sdk.getState();
         if (!s?.dialog.isOpen) break;
         await ctx.sdk.sendClickDialog(0);
         await new Promise(r => setTimeout(r, 200));
@@ -383,7 +385,7 @@ async function smeltBars(ctx: ScriptContext): Promise<number> {
         }
 
         // Dismiss any dialogs
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (state?.dialog.isOpen) {
             await ctx.sdk.sendClickDialog(0);
             await new Promise(r => setTimeout(r, 300));
@@ -414,7 +416,7 @@ async function smeltBars(ctx: ScriptContext): Promise<number> {
         // Handle the smelting interface/dialog
         // The smelting interface should appear - click to make bronze bar
         for (let i = 0; i < 10; i++) {
-            const s = ctx.state();
+            const s = ctx.sdk.getState();
 
             // Check if dialog opened (smelting menu)
             if (s?.dialog.isOpen) {
@@ -463,7 +465,7 @@ async function smeltBars(ctx: ScriptContext): Promise<number> {
 // Find and use anvil to smith items
 async function smithItems(ctx: ScriptContext): Promise<number> {
     // Check for anvil near furnace first
-    let anvil = ctx.state()?.nearbyLocs.find(l => /anvil/i.test(l.name));
+    let anvil = ctx.sdk.getState()?.nearbyLocs.find(l => /anvil/i.test(l.name));
 
     if (!anvil) {
         // Try walking around Al Kharid to find anvil
@@ -472,16 +474,16 @@ async function smithItems(ctx: ScriptContext): Promise<number> {
         // Known Al Kharid anvil location (near general store)
         const alKharidAnvil = { x: 3290, z: 3179 };
         await ctx.bot.walkTo(alKharidAnvil.x, alKharidAnvil.z);
-    
-        anvil = ctx.state()?.nearbyLocs.find(l => /anvil/i.test(l.name));
+
+        anvil = ctx.sdk.getState()?.nearbyLocs.find(l => /anvil/i.test(l.name));
     }
 
     if (!anvil) {
         ctx.log('No anvil found, trying Varrock...');
         // Walk to Varrock west anvil
         await ctx.bot.walkTo(3188, 3427);
-    
-        anvil = ctx.state()?.nearbyLocs.find(l => /anvil/i.test(l.name));
+
+        anvil = ctx.sdk.getState()?.nearbyLocs.find(l => /anvil/i.test(l.name));
     }
 
     if (!anvil) {
@@ -508,7 +510,7 @@ async function smithItems(ctx: ScriptContext): Promise<number> {
         }
 
         // Dismiss any dialogs
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (state?.dialog.isOpen) {
             await ctx.sdk.sendClickDialog(0);
             await new Promise(r => setTimeout(r, 300));
@@ -533,7 +535,7 @@ async function smithItems(ctx: ScriptContext): Promise<number> {
         // Smithing interface (id 994) uses iop not buttonType
         // We need to click a specific component to make items
         for (let i = 0; i < 15; i++) {
-            const s = ctx.state();
+            const s = ctx.sdk.getState();
 
             // Check dialog
             if (s?.dialog.isOpen) {
@@ -595,7 +597,7 @@ async function smithItems(ctx: ScriptContext): Promise<number> {
 
 // Drop items to make space
 async function dropItems(ctx: ScriptContext, pattern: RegExp): Promise<void> {
-    const items = ctx.state()?.inventory.filter(i => pattern.test(i.name)) ?? [];
+    const items = ctx.sdk.getState()?.inventory.filter(i => pattern.test(i.name)) ?? [];
     for (const item of items) {
         await ctx.sdk.sendDropItem(item.slot);
         await new Promise(r => setTimeout(r, 100));
@@ -622,93 +624,98 @@ async function equipPickaxe(ctx: ScriptContext): Promise<boolean> {
 }
 
 // Main script
-runScript({
-    name: 'smithing',
-    goal: 'Train Smithing to level 10',
-    preset: TestPresets.LUMBRIDGE_SPAWN,
-    timeLimit: 15 * 60 * 1000,  // 15 minutes
-    stallTimeout: 60_000,       // 60 seconds (smithing can be slow)
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
-    const { log, progress } = ctx;
+async function main() {
+    const username = `sm${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
 
-    log('=== Smithing Training Script v2 ===');
+    try {
+        await runScript(async (ctx) => {
+            const { log } = ctx;
 
-    const startStats = getSmithingStats(ctx);
-    log(`Starting Smithing: Level ${startStats.level} (${startStats.xp} XP)`);
+            log('=== Smithing Training Script v2 ===');
 
-    // Equip pickaxe first
-    await equipPickaxe(ctx);
-    progress();
+            const startStats = getSmithingStats(ctx);
+            log(`Starting Smithing: Level ${startStats.level} (${startStats.xp} XP)`);
 
-    // Check for hammer (needed for smithing at anvil)
-    let hammer = ctx.sdk.findInventoryItem(/hammer/i);
-    if (!hammer) {
-        log('No hammer - will only be able to smelt bars');
-        // Smelting still gives XP, so we can train without a hammer
-    }
+            // Equip pickaxe first
+            await equipPickaxe(ctx);
 
-    // Main loop
-    let iterations = 0;
-    while (iterations < 20) {  // Safety limit
-        iterations++;
-        const stats = getSmithingStats(ctx);
-
-        if (stats.level >= 10) {
-            log(`Goal achieved! Smithing level ${stats.level}`);
-            break;
-        }
-
-        log(`\n=== Iteration ${iterations}: Smithing Level ${stats.level} (${stats.xp} XP) ===`);
-
-        // Step 1: Get coins if we don't have enough (for toll)
-        if (getCoins(ctx) < 10 && !isInsideAlKharid(ctx)) {
-            await getCoinsFromShop(ctx);
-        }
-
-        // Step 2: Mine ore if we don't have enough
-        const ore = countOre(ctx);
-        log(`Inventory: ${ore.copper} copper, ${ore.tin} tin, ${ore.bronzeBars} bars`);
-
-        const pairs = Math.min(ore.copper, ore.tin);
-        if (pairs < 5) {
-            await walkToMine(ctx);
-            await mineOre(ctx, 8);  // Mine 8 pairs
-        }
-
-        // Step 3: Travel to Al-Kharid for smelting
-        if (!isInsideAlKharid(ctx)) {
-            const entered = await enterAlKharid(ctx);
-            if (!entered) {
-                log('Failed to enter Al Kharid, retrying...');
-                continue;
+            // Check for hammer (needed for smithing at anvil)
+            let hammer = ctx.sdk.findInventoryItem(/hammer/i);
+            if (!hammer) {
+                log('No hammer - will only be able to smelt bars');
+                // Smelting still gives XP, so we can train without a hammer
             }
-        }
 
-        // Step 4: Smelt bars
-        const oreAfterMining = countOre(ctx);
-        const pairsToSmelt = Math.min(oreAfterMining.copper, oreAfterMining.tin);
-        if (pairsToSmelt > 0) {
-            log(`Smelting ${pairsToSmelt} bronze bars...`);
-            const smelted = await smeltBars(ctx);
-            log(`Smelted ${smelted} bars`);
-        }
+            // Main loop
+            let iterations = 0;
+            while (iterations < 20) {  // Safety limit
+                iterations++;
+                const stats = getSmithingStats(ctx);
 
-        // Step 5: Smith items (if we have a hammer)
-        hammer = ctx.sdk.findInventoryItem(/hammer/i);
-        const barsCount = countOre(ctx);
-        if (hammer && barsCount.bronzeBars > 0) {
-            log(`Smithing with ${barsCount.bronzeBars} bars...`);
-            const smithed = await smithItems(ctx);
-            log(`Smithed ${smithed} items`);
-        }
+                if (stats.level >= 10) {
+                    log(`Goal achieved! Smithing level ${stats.level}`);
+                    break;
+                }
 
-        // Drop smithed items to make inventory space
-        await dropItems(ctx, /bronze (dagger|sword|axe|mace|med helm|bolts)/i);
+                log(`\n=== Iteration ${iterations}: Smithing Level ${stats.level} (${stats.xp} XP) ===`);
 
-        progress();
+                // Step 1: Get coins if we don't have enough (for toll)
+                if (getCoins(ctx) < 10 && !isInsideAlKharid(ctx)) {
+                    await getCoinsFromShop(ctx);
+                }
+
+                // Step 2: Mine ore if we don't have enough
+                const ore = countOre(ctx);
+                log(`Inventory: ${ore.copper} copper, ${ore.tin} tin, ${ore.bronzeBars} bars`);
+
+                const pairs = Math.min(ore.copper, ore.tin);
+                if (pairs < 5) {
+                    await walkToMine(ctx);
+                    await mineOre(ctx, 8);  // Mine 8 pairs
+                }
+
+                // Step 3: Travel to Al-Kharid for smelting
+                if (!isInsideAlKharid(ctx)) {
+                    const entered = await enterAlKharid(ctx);
+                    if (!entered) {
+                        log('Failed to enter Al Kharid, retrying...');
+                        continue;
+                    }
+                }
+
+                // Step 4: Smelt bars
+                const oreAfterMining = countOre(ctx);
+                const pairsToSmelt = Math.min(oreAfterMining.copper, oreAfterMining.tin);
+                if (pairsToSmelt > 0) {
+                    log(`Smelting ${pairsToSmelt} bronze bars...`);
+                    const smelted = await smeltBars(ctx);
+                    log(`Smelted ${smelted} bars`);
+                }
+
+                // Step 5: Smith items (if we have a hammer)
+                hammer = ctx.sdk.findInventoryItem(/hammer/i);
+                const barsCount = countOre(ctx);
+                if (hammer && barsCount.bronzeBars > 0) {
+                    log(`Smithing with ${barsCount.bronzeBars} bars...`);
+                    const smithed = await smithItems(ctx);
+                    log(`Smithed ${smithed} items`);
+                }
+
+                // Drop smithed items to make inventory space
+                await dropItems(ctx, /bronze (dagger|sword|axe|mace|med helm|bolts)/i);
+            }
+
+            const endStats = getSmithingStats(ctx);
+            log(`\n=== Complete: Level ${endStats.level} (${endStats.xp} XP) ===`);
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 15 * 60 * 1000,  // 15 minutes
+        });
+    } finally {
+        await session.cleanup();
     }
+}
 
-    const endStats = getSmithingStats(ctx);
-    log(`\n=== Complete: Level ${endStats.level} (${endStats.xp} XP) ===`);
-});
+main().catch(console.error);

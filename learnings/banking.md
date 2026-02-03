@@ -9,7 +9,7 @@ Successful patterns for bank interactions.
 // Open bank (finds banker NPC or booth automatically)
 const openResult = await ctx.bot.openBank();
 if (!openResult.success) {
-    ctx.log(`Failed to open bank: ${openResult.message}`);
+    console.log(`Failed to open bank: ${openResult.message}`);
 }
 
 // Deposit item by name
@@ -30,14 +30,14 @@ await ctx.bot.closeBank();
 
 ```typescript
 // Deposit specific item
-const ore = ctx.state()?.inventory.find(i => /ore$/i.test(i.name));
+const ore = ctx.sdk.getState()?.inventory.find(i => /ore$/i.test(i.name));
 if (ore) {
     await ctx.sdk.sendBankDeposit(ore.slot, ore.count);
     await new Promise(r => setTimeout(r, 200));
 }
 
 // Deposit all of a type
-const ores = ctx.state()?.inventory.filter(i => /ore$/i.test(i.name)) ?? [];
+const ores = ctx.sdk.getState()?.inventory.filter(i => /ore$/i.test(i.name)) ?? [];
 for (const ore of ores) {
     await ctx.sdk.sendBankDeposit(ore.slot, ore.count);
     await new Promise(r => setTimeout(r, 200));
@@ -95,7 +95,7 @@ async function bankTrip(ctx, itemPattern, bankCoords, returnCoords) {
     // Open bank (automatically finds banker/booth)
     const openResult = await ctx.bot.openBank();
     if (!openResult.success) {
-        ctx.log(`Failed to open bank: ${openResult.message}`);
+        console.log(`Failed to open bank: ${openResult.message}`);
         return;
     }
 

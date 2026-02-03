@@ -18,8 +18,9 @@
  * XP needed for level 10: 1,154 XP = ~14 laps
  */
 
-import { runScript, TestPresets } from '../script-runner';
-import type { ScriptContext } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 
 // Gnome Stronghold Agility Course start location
 const GNOME_AGILITY_START = { x: 2474, z: 3436 };
@@ -43,7 +44,7 @@ const COURSE_OBSTACLES = [
  * Calculate distance to a point
  */
 function distanceTo(ctx: ScriptContext, x: number, z: number): number {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state?.player) return Infinity;
     const dx = x - state.player.worldX;
     const dz = z - state.player.worldZ;
@@ -86,7 +87,7 @@ function findNextObstacle(ctx: ScriptContext, courseIndex: number) {
 async function completeObstacle(ctx: ScriptContext, courseIndex: number): Promise<boolean> {
     const xpBefore = ctx.sdk.getSkill('Agility')?.experience ?? 0;
     const target = COURSE_OBSTACLES[courseIndex % COURSE_OBSTACLES.length];
-    const startTick = ctx.state()?.tick ?? 0;
+    const startTick = ctx.sdk.getState()?.tick ?? 0;
 
     const obstacle = findNextObstacle(ctx, courseIndex);
     if (!obstacle) {
@@ -111,8 +112,8 @@ async function completeObstacle(ctx: ScriptContext, courseIndex: number): Promis
     await ctx.sdk.sendInteractLoc(obstacle.x, obstacle.z, obstacle.id, opt.opIndex);
 
     // Wait for XP gain or significant position change
-    const startX = ctx.state()?.player?.worldX ?? 0;
-    const startZ = ctx.state()?.player?.worldZ ?? 0;
+    const startX = ctx.sdk.getState()?.player?.worldX ?? 0;
+    const startZ = ctx.sdk.getState()?.player?.worldZ ?? 0;
 
     try {
         await ctx.sdk.waitForCondition(state => {
@@ -148,8 +149,8 @@ async function completeObstacle(ctx: ScriptContext, courseIndex: number): Promis
         }
 
         // Position changed but no XP - might need to re-attempt
-        const endX = ctx.state()?.player?.worldX ?? 0;
-        const endZ = ctx.state()?.player?.worldZ ?? 0;
+        const endX = ctx.sdk.getState()?.player?.worldX ?? 0;
+        const endZ = ctx.sdk.getState()?.player?.worldZ ?? 0;
         if (Math.abs(endX - startX) > 4 || Math.abs(endZ - startZ) > 4) {
             ctx.log(`  Position changed - obstacle may be complete`);
             return true;
@@ -203,7 +204,7 @@ async function completeLap(ctx: ScriptContext): Promise<boolean> {
  * Main training function
  */
 async function trainAgility(ctx: ScriptContext): Promise<void> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state?.player) throw new Error('No initial state');
 
     const startXp = ctx.sdk.getSkill('Agility')?.experience ?? 0;
@@ -270,14 +271,21 @@ async function trainAgility(ctx: ScriptContext): Promise<void> {
     }
 }
 
-// Run the script
-runScript({
-    name: 'agility',
-    goal: `Train Agility from level 1 to ${TARGET_LEVEL} at Gnome Stronghold`,
-    preset: TestPresets.GNOME_AGILITY,
-    timeLimit: 10 * 60 * 1000,  // 10 minutes
-    stallTimeout: 60_000,       // 1 min
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
-    await trainAgility(ctx);
-});
+async function main() {
+    const username = `ag${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.GNOME_AGILITY);
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
+
+    try {
+        await runScript(async (ctx) => {
+            await trainAgility(ctx);
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 10 * 60 * 1000,  // 10 minutes
+        });
+    } finally {
+        await session.cleanup();
+    }
+}
+
+main().catch(console.error);

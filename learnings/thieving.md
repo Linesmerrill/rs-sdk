@@ -16,16 +16,16 @@ Men at Lumbridge castle are excellent for early thieving. Proven: 1 → 43 in ~1
 
 ```typescript
 // Find a man to pickpocket
-const man = ctx.state()?.nearbyNpcs.find(n => /^man$/i.test(n.name));
+const man = ctx.sdk.getState()?.nearbyNpcs.find(n => /^man$/i.test(n.name));
 if (!man) {
-    ctx.log('No man found nearby');
+    console.log('No man found nearby');
     return;
 }
 
 // Find the Pickpocket option
 const pickpocketOpt = man.optionsWithIndex.find(o => /pickpocket/i.test(o.text));
 if (!pickpocketOpt) {
-    ctx.log('No pickpocket option on this NPC');
+    console.log('No pickpocket option on this NPC');
     return;
 }
 
@@ -51,11 +51,11 @@ When caught, the character is stunned for ~5 seconds:
 
 ```typescript
 // Check for stun (player can't act)
-const messages = ctx.state()?.gameMessages ?? [];
+const messages = ctx.sdk.getState()?.gameMessages ?? [];
 const wasStunned = messages.some(m => /stunned|caught/i.test(m.text));
 
 if (wasStunned) {
-    ctx.log('Stunned! Waiting for recovery...');
+    console.log('Stunned! Waiting for recovery...');
     await new Promise(r => setTimeout(r, 5000));  // 5 second stun
 }
 ```
@@ -63,19 +63,19 @@ if (wasStunned) {
 ### Full Thieving Loop
 
 ```typescript
-async function pickpocketLoop(ctx: ScriptContext, duration: number) {
+async function pickpocketLoop(ctx, duration: number) {
     const startTime = Date.now();
     let successCount = 0;
 
     while (Date.now() - startTime < duration) {
         // Dismiss any dialogs first
-        if (ctx.state()?.dialog.isOpen) {
+        if (ctx.sdk.getState()?.dialog.isOpen) {
             await ctx.sdk.sendClickDialog(0);
             continue;
         }
 
         // Find target
-        const man = ctx.state()?.nearbyNpcs.find(n => /^man$/i.test(n.name));
+        const man = ctx.sdk.getState()?.nearbyNpcs.find(n => /^man$/i.test(n.name));
         if (!man) {
             // Walk to Lumbridge castle
             await ctx.bot.walkTo(3222, 3218);
@@ -90,11 +90,9 @@ async function pickpocketLoop(ctx: ScriptContext, duration: number) {
             await new Promise(r => setTimeout(r, 1500));
             successCount++;
         }
-
-        ctx.progress();
     }
 
-    ctx.log(`Completed ${successCount} pickpocket attempts`);
+    console.log(`Completed ${successCount} pickpocket attempts`);
 }
 ```
 
@@ -106,11 +104,11 @@ Bank when you hit 200-500 GP to avoid losing progress on disconnect:
 const GP_BANK_THRESHOLD = 500;
 
 // Check GP in inventory
-const coins = ctx.state()?.inventory.find(i => /coins/i.test(i.name));
+const coins = ctx.sdk.getState()?.inventory.find(i => /coins/i.test(i.name));
 const gp = coins?.count ?? 0;
 
 if (gp >= GP_BANK_THRESHOLD) {
-    ctx.log(`Have ${gp} GP - banking!`);
+    console.log(`Have ${gp} GP - banking!`);
     await bankTrip(ctx);  // Walk to Draynor, deposit
 }
 ```
@@ -139,7 +137,7 @@ const kebabCount = getKebabCount(ctx);
 
 if (hp.current <= EAT_HP_THRESHOLD) {
     // Eat food if available
-    const food = ctx.state()?.inventory.find(i => /kebab/i.test(i.name));
+    const food = ctx.sdk.getState()?.inventory.find(i => /kebab/i.test(i.name));
     if (food) {
         const eatOpt = food.optionsWithIndex.find(o => /eat/i.test(o.text));
         await ctx.sdk.sendUseItem(food.slot, eatOpt.opIndex);
@@ -159,7 +157,7 @@ if (distToMen > 15) {
 }
 
 // Pickpocket
-const man = ctx.state()?.nearbyNpcs.find(n => /^man$/i.test(n.name));
+const man = ctx.sdk.getState()?.nearbyNpcs.find(n => /^man$/i.test(n.name));
 // ... standard pickpocket pattern
 ```
 

@@ -55,7 +55,6 @@ while (true) {
         await ctx.sdk.sendInteractNpc(spot.index, netOpt.opIndex);
     }
 
-    ctx.progress();
     await new Promise(r => setTimeout(r, 1000));
 }
 ```
@@ -85,7 +84,7 @@ const drift = Math.sqrt(
 );
 
 if (drift > MAX_DRIFT) {
-    ctx.log(`Drifted ${drift.toFixed(0)} tiles, walking back`);
+    console.log(`Drifted ${drift.toFixed(0)} tiles, walking back`);
     await ctx.bot.walkTo(START_AREA.x, START_AREA.z);
 }
 ```

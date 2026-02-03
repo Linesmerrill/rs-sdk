@@ -6,8 +6,9 @@
  * - At level 20+, switch to oak trees -> oak shortbows/longbows
  */
 
-import { runScript, type ScriptContext } from '../script-runner';
-import { Items, Locations } from '../../test/utils/save-generator';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets, Items, Locations } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 
 // Locations
 const NORMAL_TREES_AREA = { x: 3200, z: 3230 };
@@ -42,11 +43,11 @@ interface GPTracker {
 }
 
 function getFletchingLevel(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Fletching')?.baseLevel ?? 1;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Fletching')?.baseLevel ?? 1;
 }
 
 function getWoodcuttingLevel(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Woodcutting')?.baseLevel ?? 1;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Woodcutting')?.baseLevel ?? 1;
 }
 
 function getGP(ctx: ScriptContext): number {
@@ -56,14 +57,14 @@ function getGP(ctx: ScriptContext): number {
 
 function countLogs(ctx: ScriptContext): { normal: number; oak: number; total: number } {
     // Logs don't stack - count all log items in inventory
-    const inv = ctx.state()?.inventory ?? [];
+    const inv = ctx.sdk.getState()?.inventory ?? [];
     const normal = inv.filter(i => /^logs$/i.test(i.name)).length;
     const oak = inv.filter(i => /^oak logs$/i.test(i.name)).length;
     return { normal, oak, total: normal + oak };
 }
 
 function countSellableItems(ctx: ScriptContext): number {
-    const inv = ctx.state()?.inventory ?? [];
+    const inv = ctx.sdk.getState()?.inventory ?? [];
     // Count arrow shafts (15 per log) and unstrung bows (1 per log)
     // Include oak shortbow and oak longbow
     return inv.filter(i =>
@@ -72,7 +73,7 @@ function countSellableItems(ctx: ScriptContext): number {
 }
 
 function getInventoryFreeSlots(ctx: ScriptContext): number {
-    const inv = ctx.state()?.inventory ?? [];
+    const inv = ctx.sdk.getState()?.inventory ?? [];
     return 28 - inv.length;
 }
 
@@ -85,20 +86,8 @@ function logStats(ctx: ScriptContext, tracker: GPTracker, label: string): void {
     ctx.log(`[${label}] GP: ${gpEarned} | Fletch: ${level} | Logs: ${tracker.logsChopped} | Fletched: ${tracker.productsFletched} | Sold: ${tracker.itemsSold}${cyclesStr}`);
 }
 
-runScript({
-    name: 'fletching-gp',
-    goal: 'Maximize GP from fletching and selling longbows in 10 minutes',
-    preset: {
-        position: { x: 3224, z: 3205 },  // Near knife spawn SE of castle
-        inventory: [
-            { id: Items.BRONZE_AXE, count: 1 },
-        ],
-    },
-    timeLimit: 10 * 60 * 1000,
-    stallTimeout: 45_000,
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
-    const { bot, sdk, log, progress } = ctx;
+async function fletchingGP(ctx: ScriptContext) {
+    const { bot, sdk, log } = ctx;
 
     // Initialize tracking
     const tracker: GPTracker = {
@@ -126,7 +115,6 @@ runScript({
                 const result = await bot.pickupItem(knife);
                 if (result.success) {
                     log('Got knife!');
-                    progress();
                     break;
                 } else {
                     log(`Pickup failed: ${result.message}`);
@@ -135,7 +123,6 @@ runScript({
                 log(`No knife visible (attempt ${attempt + 1})`);
             }
             await sleep(1000);
-            progress();
         }
 
         if (!hasKnife()) {
@@ -145,7 +132,7 @@ runScript({
 
     // Main loop: Chop -> Fletch -> Sell
     while (true) {
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (!state?.player) {
             await sleep(500);
             continue;
@@ -160,7 +147,6 @@ runScript({
             if (food) {
                 log(`HP low (${currentHp}/${maxHp}), eating ${food.name}...`);
                 await bot.eatFood(food);
-                progress();
             }
         }
 
@@ -176,17 +162,16 @@ runScript({
                 log(`Closing shop (attempt ${attempt + 1})...`);
                 await sdk.sendCloseShop();
                 await sleep(600);
-                if (!ctx.state()?.shop.isOpen) {
+                if (!ctx.sdk.getState()?.shop.isOpen) {
                     log('Shop closed successfully');
                     break;
                 }
             }
             // If STILL open after 5 attempts, walk away to force close
-            if (ctx.state()?.shop.isOpen) {
+            if (ctx.sdk.getState()?.shop.isOpen) {
                 log('Shop stuck, walking away to force close...');
                 await bot.walkTo(NORMAL_TREES_AREA.x, NORMAL_TREES_AREA.z);
             }
-            progress();
             continue;
         }
 
@@ -194,7 +179,6 @@ runScript({
         if (state.dialog.isOpen) {
             await sdk.sendClickDialog(0);
             await sleep(250);
-            progress();
             continue;
         }
 
@@ -219,7 +203,6 @@ runScript({
 
             // Walk to general store
             await bot.walkTo(GENERAL_STORE.x, GENERAL_STORE.z);
-            progress();
 
             // Open shop
             const shopResult = await bot.openShop(/shop.*keeper|general/i);
@@ -228,7 +211,6 @@ runScript({
                 await sleep(1000);
                 continue;
             }
-            progress();
 
             // Sell all fletched products - oak longbows first (most valuable)
             const sellPatterns = [/oak longbow/i, /oak shortbow/i, /longbow/i, /shortbow/i, /arrow shaft/i];
@@ -239,7 +221,7 @@ runScript({
                 let attempts = 0;
                 while (attempts < 20) { // Max 20 attempts per pattern
                     attempts++;
-                    const currentState = ctx.state();
+                    const currentState = ctx.sdk.getState();
                     if (!currentState?.shop.isOpen) break;
 
                     const item = currentState.shop.playerItems.find(i => pattern.test(i.name));
@@ -256,7 +238,6 @@ runScript({
                         totalItemsSold += sold;
                         tracker.itemsSold += sold;
                         log(`Sold ${item.name} (+${gpGained} GP)`);
-                        progress();
                     } else if (sellResult.rejected) {
                         log(`Shop won't buy ${item.name}`);
                         break;
@@ -278,13 +259,13 @@ runScript({
             if (tracker.gpPerCycle.length >= 2) {
                 const lastCycleGP = tracker.gpPerCycle[tracker.gpPerCycle.length - 2];
                 if (lastCycleGP !== undefined && cycleGP < lastCycleGP * 0.6) {
-                    log(`⚠️ Shop saturation detected: GP dropped from ${lastCycleGP} to ${cycleGP}`);
+                    log(`WARNING: Shop saturation detected: GP dropped from ${lastCycleGP} to ${cycleGP}`);
                 }
             }
 
             // Dismiss any level-up dialogs that appeared during selling
             for (let i = 0; i < 5; i++) {
-                const currentState = ctx.state();
+                const currentState = ctx.sdk.getState();
                 if (currentState?.dialog.isOpen) {
                     log('Dismissing dialog before closing shop...');
                     await sdk.sendClickDialog(0);
@@ -299,7 +280,7 @@ runScript({
             await sleep(500);
 
             // If shop still open, force close
-            if (ctx.state()?.shop.isOpen) {
+            if (ctx.sdk.getState()?.shop.isOpen) {
                 log('Shop still open after closeShop, forcing close...');
                 await sdk.sendCloseShop();
                 await sleep(500);
@@ -310,13 +291,12 @@ runScript({
             const gpEarned = tracker.currentGP - tracker.startingGP;
             log(`Total GP earned so far: ${gpEarned}`);
             logStats(ctx, tracker, 'AFTER SELL');
-            progress();
 
         } else if (logs.total >= MIN_LOGS_TO_FLETCH && (logs.total >= LOGS_BEFORE_FLETCH || freeSlots <= 3)) {
             // === FLETCHING PHASE ===
             // First dismiss any dialogs
             for (let i = 0; i < 3; i++) {
-                if (ctx.state()?.dialog.isOpen) {
+                if (ctx.sdk.getState()?.dialog.isOpen) {
                     await sdk.sendClickDialog(0);
                     await sleep(300);
                 } else {
@@ -346,7 +326,7 @@ runScript({
 
             while (countLogs(ctx).total > 0 && Date.now() - fletchStart < maxFletchTime) {
                 // Dismiss any dialogs first
-                if (ctx.state()?.dialog.isOpen) {
+                if (ctx.sdk.getState()?.dialog.isOpen) {
                     await sdk.sendClickDialog(0);
                     await sleep(200);
                     continue;
@@ -366,7 +346,6 @@ runScript({
                     fletchedThisBatch++;
                     tracker.productsFletched++;
                     consecutiveFailures = 0;
-                    progress();
 
                     // Check if we leveled up
                     const newLevel = getFletchingLevel(ctx);
@@ -402,7 +381,6 @@ runScript({
                 const targetArea = useOaks ? OAK_TREES_AREA : NORMAL_TREES_AREA;
                 log(`No trees nearby, walking to ${useOaks ? 'oak' : 'normal'} trees...`);
                 await bot.walkTo(targetArea.x, targetArea.z);
-                progress();
                 await sleep(500);
                 continue;
             }
@@ -411,7 +389,6 @@ runScript({
             const chopResult = await bot.chopTree(tree);
             if (chopResult.success) {
                 tracker.logsChopped++;
-                progress();
 
                 // Log progress occasionally
                 if (tracker.logsChopped % 10 === 0) {
@@ -425,7 +402,57 @@ runScript({
 
         await sleep(100);
     }
-});
+}
+
+// Main script
+async function main() {
+    // Create fresh account
+    const username = `fg${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, {
+        position: { x: 3224, z: 3205 },  // Near knife spawn SE of castle
+        inventory: [
+            { id: Items.BRONZE_AXE, count: 1 },
+        ],
+    });
+
+    // Launch browser
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
+
+    try {
+        await runScript(async (ctx) => {
+            const { log } = ctx;
+
+            log('=== Fletching GP Maximizer ===');
+            log('Goal: Maximize GP from fletching and selling longbows in 10 minutes');
+
+            // Wait for state to initialize
+            await new Promise(r => setTimeout(r, 2000));
+
+            const state = ctx.sdk.getState();
+            if (!state?.player) {
+                ctx.error('No player state');
+                return;
+            }
+
+            log(`Starting at (${state.player.worldX}, ${state.player.worldZ})`);
+
+            // Dismiss any startup dialogs
+            await ctx.bot.dismissBlockingUI();
+
+            // Run the fletching loop
+            await fletchingGP(ctx);
+
+            log('=== Script Complete ===');
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 10 * 60 * 1000,  // 10 minutes
+        });
+    } finally {
+        await session.cleanup();
+    }
+}
+
+main().catch(console.error);
 
 // Helper
 function sleep(ms: number): Promise<void> {

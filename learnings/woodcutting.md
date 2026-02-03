@@ -74,7 +74,7 @@ const tinderbox = ctx.sdk.findInventoryItem(/tinderbox/i);
 if (logs && tinderbox) {
     const result = await ctx.bot.burnLogs();
     if (result.success) {
-        ctx.log(`Burned logs, gained ${result.xpGained} FM XP`);
+        console.log(`Burned logs, gained ${result.xpGained} FM XP`);
     }
 }
 ```

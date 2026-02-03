@@ -15,7 +15,9 @@
  * - Fire lighting can fail if standing on a fire or blocked tile
  */
 
-import { runScript, type ScriptContext, StallError, TestPresets } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 import type { NearbyLoc, InventoryItem } from '../../sdk/types';
 
 // Lumbridge tree locations (near castle)
@@ -35,41 +37,41 @@ interface Stats {
 // Note: ctx.progress() removed - bot actions and movement auto-reset stall timer
 
 function getFiremakingXp(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Firemaking')?.experience ?? 0;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Firemaking')?.experience ?? 0;
 }
 
 function getFiremakingLevel(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Firemaking')?.baseLevel ?? 1;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Firemaking')?.baseLevel ?? 1;
 }
 
 function getWoodcuttingXp(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Woodcutting')?.experience ?? 0;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Woodcutting')?.experience ?? 0;
 }
 
 function getWoodcuttingLevel(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Woodcutting')?.baseLevel ?? 1;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Woodcutting')?.baseLevel ?? 1;
 }
 
 function getPlayerPos(ctx: ScriptContext): { x: number; z: number } | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state?.player) return null;
     return { x: state.player.worldX, z: state.player.worldZ };
 }
 
 function countLogs(ctx: ScriptContext): number {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return 0;
     return state.inventory.filter(item => /^logs$/i.test(item.name)).reduce((sum, i) => sum + i.count, 0);
 }
 
 function hasTinderbox(ctx: ScriptContext): boolean {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return false;
     return state.inventory.some(item => /tinderbox/i.test(item.name));
 }
 
 function hasAxe(ctx: ScriptContext): boolean {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return false;
     // Check inventory and equipment for any axe
     const inInv = state.inventory.some(item => /axe/i.test(item.name));
@@ -78,7 +80,7 @@ function hasAxe(ctx: ScriptContext): boolean {
 }
 
 function findTree(ctx: ScriptContext): NearbyLoc | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return null;
 
     // Find regular trees (not oak, willow, etc. - those require higher levels)
@@ -91,7 +93,7 @@ function findTree(ctx: ScriptContext): NearbyLoc | null {
 }
 
 function getInventoryCount(ctx: ScriptContext): number {
-    return ctx.state()?.inventory.length ?? 0;
+    return ctx.sdk.getState()?.inventory.length ?? 0;
 }
 
 /**
@@ -99,7 +101,7 @@ function getInventoryCount(ctx: ScriptContext): number {
  */
 async function dismissDialogs(ctx: ScriptContext, stats: Stats, maxCount: number = 3): Promise<number> {
     let dismissed = 0;
-    while (ctx.state()?.dialog.isOpen && dismissed < maxCount) {
+    while (ctx.sdk.getState()?.dialog.isOpen && dismissed < maxCount) {
         await ctx.sdk.sendClickDialog(0);
         await new Promise(r => setTimeout(r, 200));
         dismissed++;
@@ -210,7 +212,7 @@ async function burnLogs(ctx: ScriptContext, stats: Stats): Promise<void> {
  * Log final statistics
  */
 function logFinalStats(ctx: ScriptContext, stats: Stats) {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     const firemaking = state?.skills.find(s => s.name === 'Firemaking');
     const woodcutting = state?.skills.find(s => s.name === 'Woodcutting');
 
@@ -237,7 +239,7 @@ function logFinalStats(ctx: ScriptContext, stats: Stats) {
 async function mainLoop(ctx: ScriptContext, stats: Stats): Promise<void> {
     ctx.log('=== Firemaking Training Script ===');
     ctx.log(`Starting levels: Firemaking ${getFiremakingLevel(ctx)}, Woodcutting ${getWoodcuttingLevel(ctx)}`);
-    ctx.log(`Position: (${ctx.state()?.player?.worldX}, ${ctx.state()?.player?.worldZ})`);
+    ctx.log(`Position: (${ctx.sdk.getState()?.player?.worldX}, ${ctx.sdk.getState()?.player?.worldZ})`);
 
     // Verify we have the required items
     if (!hasTinderbox(ctx)) {
@@ -269,34 +271,44 @@ async function mainLoop(ctx: ScriptContext, stats: Stats): Promise<void> {
     ctx.log('\n*** GOAL ACHIEVED: Firemaking Level 10+ ***');
 }
 
-// Run the script
-runScript({
-    name: 'firemaking',
-    goal: 'Train Firemaking from level 1 to level 10+',
-    preset: TestPresets.LUMBRIDGE_SPAWN,
-    timeLimit: 10 * 60 * 1000,      // 10 minutes
-    stallTimeout: 45_000,            // 45 seconds (tree chopping can take time)
-    screenshotInterval: 15_000,
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
-    const stats: Stats = {
-        logsCut: 0,
-        logsBurned: 0,
-        startFiremakingXp: getFiremakingXp(ctx),
-        startWoodcuttingXp: getWoodcuttingXp(ctx),
-        startTime: Date.now(),
-        lastProgressTime: Date.now(),
-    };
+// Main entry point
+async function main() {
+    // Create fresh account
+    const username = `FM${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
+
+    // Launch browser
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
 
     try {
-        await mainLoop(ctx, stats);
-    } catch (e) {
-        if (e instanceof StallError) {
-            ctx.error(`Script aborted: ${e.message}`);
-        } else {
-            throw e;
-        }
+        await runScript(async (ctx) => {
+            const stats: Stats = {
+                logsCut: 0,
+                logsBurned: 0,
+                startFiremakingXp: getFiremakingXp(ctx),
+                startWoodcuttingXp: getWoodcuttingXp(ctx),
+                startTime: Date.now(),
+                lastProgressTime: Date.now(),
+            };
+
+            try {
+                await mainLoop(ctx, stats);
+            } catch (e) {
+                if (e instanceof Error) {
+                    ctx.error(`Script aborted: ${e.message}`);
+                } else {
+                    throw e;
+                }
+            } finally {
+                logFinalStats(ctx, stats);
+            }
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 10 * 60 * 1000,
+        });
     } finally {
-        logFinalStats(ctx, stats);
+        await session.cleanup();
     }
-});
+}
+
+main().catch(console.error);

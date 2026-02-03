@@ -11,8 +11,6 @@ These methods wait for the **effect to complete**, not just server acknowledgmen
 
 | Method | Description |
 |--------|-------------|
-| `skipTutorial()` | Skip tutorial by navigating dialogs and talking to tutorial NPCs. |
-| `dismissBlockingUI()` | Dismiss any blocking UI like level-up dialogs. |
 | `waitForDialogClose(timeout)` | Wait for dialog to close. |
 
 ### Movement
@@ -27,7 +25,6 @@ These methods wait for the **effect to complete**, not just server acknowledgmen
 |--------|-------------|
 | `equipItem(target)` | Equip an item from inventory. |
 | `unequipItem(target)` | Unequip an item to inventory. |
-| `getEquipment()` | Get all currently equipped items. |
 | `findEquippedItem(pattern)` | Find an equipped item by name pattern. |
 | `eatFood(target)` | Eat food to restore hitpoints. |
 | `attackNpc(target, timeout)` | Attack an NPC, walking to it if needed. |
@@ -102,30 +99,17 @@ These methods resolve when server **acknowledges** them (not when effects comple
 
 | Method | Description |
 |--------|-------------|
-| `getConnectionState()` | Get current connection state (connecting, connected, reconnecting, disconnected). |
-| `getReconnectAttempt()` | Get current reconnection attempt number. |
-| `getConnectionMode()` | Get connection mode (control or observe). |
-| `getState()` | Get current game state snapshot. |
-| `getStateReceivedAt()` | Get timestamp when state was last received (ms since epoch) |
-| `getStateAge()` | Get age of current state in milliseconds |
 | `getSkill(name)` | Get a skill by name (case-insensitive). |
 | `getSkillXp(name)` | Get XP for a skill by name. |
-| `getSkills()` | Get all skills. |
 | `getInventoryItem(slot)` | Get inventory item by slot number. |
 | `findInventoryItem(pattern)` | Find inventory item by name pattern. |
-| `getInventory()` | Get all inventory items. |
 | `getEquipmentItem(slot)` | Get equipment item by slot number. |
 | `findEquipmentItem(pattern)` | Find equipment item by name pattern. |
-| `getEquipment()` | Get all equipped items. |
 | `getNearbyNpc(index)` | Get NPC by index. |
 | `findNearbyNpc(pattern)` | Find NPC by name pattern. |
-| `getNearbyNpcs()` | Get all nearby NPCs. |
 | `getNearbyLoc(x, z, id)` | Get location (object) by coordinates and ID. |
 | `findNearbyLoc(pattern)` | Find location by name pattern. |
-| `getNearbyLocs()` | Get all nearby locations (trees, rocks, etc). |
 | `findGroundItem(pattern)` | Find ground item by name pattern. |
-| `getGroundItems()` | Get all ground items. |
-| `getDialog()` | Get current dialog state. |
 
 ### On-Demand Scanning
 
@@ -154,12 +138,8 @@ These methods resolve when server **acknowledges** them (not when effects comple
 | `sendClickComponent(componentId)` | Click a component using IF_BUTTON packet - for simple buttons, spellcasting, etc. |
 | `sendClickComponentWithOption(componentId, optionIndex)` | Click a component using INV_BUTTON packet - for components with inventory operations (smithing, c... |
 | `sendClickInterfaceOption(optionIndex)` | Click an interface option by index. |
-| `sendAcceptCharacterDesign()` | Accept character design in tutorial. |
-| `sendRandomizeCharacterDesign()` | Randomize character appearance in tutorial. |
 | `sendShopBuy(slot, amount)` | Buy from shop by slot and amount. |
 | `sendShopSell(slot, amount)` | Sell to shop by slot and amount. |
-| `sendCloseShop()` | Close shop interface. |
-| `sendCloseModal()` | Close any modal interface. |
 | `sendSetCombatStyle(style)` | Set combat style (0-3). |
 | `sendSpellOnNpc(npcIndex, spellComponent)` | Cast spell on NPC using spell component ID. |
 | `sendSpellOnItem(slot, spellComponent)` | Cast spell on inventory item. |
@@ -186,23 +166,6 @@ These methods resolve when server **acknowledges** them (not when effects comple
 | `waitForReady(timeout)` | Wait for game state to be fully loaded and ready. |
 | `waitForStateChange(timeout)` | Wait for next state update from server. |
 | `waitForTicks(ticks)` | Wait for a specific number of server ticks (~420ms each). |
-| `waitForStateUpdate()` | Wait for the next state update from the server. |
-
-### Connection
-
-| Method | Description |
-|--------|-------------|
-| `connect()` | Connect to the gateway WebSocket. |
-| `disconnect()` | Disconnect from the gateway. |
-| `isConnected()` | Check if WebSocket is connected. |
-| `isBotConnected()` | Check if bot is currently connected to gateway. |
-
-### Other
-
-| Method | Description |
-|--------|-------------|
-| `checkBotStatus()` | Check bot status via gateway HTTP endpoint. |
-| `launchBrowser()` | Launch native browser to client URL. |
 
 ---
 

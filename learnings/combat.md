@@ -93,8 +93,8 @@ if (gate) {
 After killing an NPC, find the next one quickly:
 
 ```typescript
-async function findTarget(ctx: ScriptContext, pattern: RegExp): Promise<NearbyNpc | null> {
-    const state = ctx.state();
+async function findTarget(ctx, pattern: RegExp) {
+    const state = ctx.sdk.getState();
     if (!state) return null;
 
     return state.nearbyNpcs
@@ -145,7 +145,7 @@ Timeouts and errors are frequent in crowded areas. Wrap attacks in try/catch:
 try {
     await ctx.bot.attackNpc(/cow/i);
 } catch (err) {
-    ctx.log(`Attack timed out, trying next cow`);
+    console.log(`Attack timed out, trying next cow`);
     continue;  // Don't crash - just find another target
 }
 ```
@@ -163,16 +163,16 @@ try {
 Browser glitches sometimes return invalid positions. Validate state before acting:
 
 ```typescript
-const player = ctx.state()?.player;
+const player = ctx.sdk.getState()?.player;
 if (!player || player.worldX === 0 || player.worldZ === 0) {
-    ctx.log('Invalid state - waiting for sync');
+    console.log('Invalid state - waiting for sync');
     await new Promise(r => setTimeout(r, 2000));
     continue;
 }
 
 // Also catch impossible position changes (>500 tiles = glitch)
 if (Math.abs(player.worldX - lastX) > 500) {
-    ctx.log('Position glitch detected, skipping action');
+    console.log('Position glitch detected, skipping action');
     continue;
 }
 ```
@@ -194,9 +194,9 @@ function getLowestCombatStat(state): { stat: string, style: number } {
 }
 
 // Set combat style based on lowest stat
-const { stat, style } = getLowestCombatStat(ctx.state());
+const { stat, style } = getLowestCombatStat(ctx.sdk.getState());
 await ctx.sdk.sendSetCombatStyle(style);
-ctx.log(`Training ${stat} (lowest)`);
+console.log(`Training ${stat} (lowest)`);
 ```
 
 This pattern enabled balanced 60+ in all melee stats.

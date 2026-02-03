@@ -97,6 +97,9 @@ function parseClassMethods(source: string, className: string): MethodDoc[] {
     while ((match = methodRegex.exec(source)) !== null) {
         const [fullMatch, asyncKeyword, name, params, returnType] = match;
 
+        // Skip if required groups didn't match
+        if (!name || !params || !returnType) continue;
+
         // Skip private methods, constructor, keywords, and duplicates
         if (name.startsWith('_')) continue;
         if (SKIP_NAMES.has(name)) continue;
@@ -175,6 +178,8 @@ function parseTypes(source: string): TypeDoc[] {
     let match;
     while ((match = interfaceRegex.exec(source)) !== null) {
         const [fullMatch, name, body] = match;
+        if (!name || !body) continue;
+
         const description = extractJSDoc(source, match.index);
 
         const properties = parseInterfaceBody(body);
@@ -197,7 +202,7 @@ function parseInterfaceBody(body: string): { name: string; type: string; descrip
 
         // Capture single-line comments
         const commentMatch = trimmed.match(/^\/\*\*\s*(.+?)\s*\*\/$/);
-        if (commentMatch) {
+        if (commentMatch && commentMatch[1]) {
             currentComment = commentMatch[1];
             continue;
         }
@@ -206,6 +211,7 @@ function parseInterfaceBody(body: string): { name: string; type: string; descrip
         const propMatch = trimmed.match(/^(\w+)(\??)\s*:\s*(.+?);?$/);
         if (propMatch) {
             const [, name, optional, type] = propMatch;
+            if (!name || !type) continue;
             props.push({
                 name: name + (optional || ''),
                 type: type.replace(/;$/, ''),
@@ -257,29 +263,29 @@ function generateMarkdown(
     for (const method of botActionsMethods) {
         const name = method.name.toLowerCase();
         if (name.includes('dialog') || name.includes('blocking') || name.includes('tutorial')) {
-            categories['UI & Dialog'].push(method);
+            categories['UI & Dialog']!.push(method);
         } else if (name.includes('walk')) {
-            categories['Movement'].push(method);
+            categories['Movement']!.push(method);
         } else if (name.includes('attack') || name.includes('equip') || name.includes('eat') || name.includes('cast')) {
-            categories['Combat & Equipment'].push(method);
+            categories['Combat & Equipment']!.push(method);
         } else if (name.includes('chop') || name.includes('burn')) {
-            categories['Woodcutting & Firemaking'].push(method);
+            categories['Woodcutting & Firemaking']!.push(method);
         } else if (name.includes('pickup')) {
-            categories['Items & Inventory'].push(method);
+            categories['Items & Inventory']!.push(method);
         } else if (name.includes('door')) {
-            categories['Doors'].push(method);
+            categories['Doors']!.push(method);
         } else if (name.includes('talk')) {
-            categories['NPC Interaction'].push(method);
+            categories['NPC Interaction']!.push(method);
         } else if (name.includes('shop') || name.includes('buy') || name.includes('sell')) {
-            categories['Shopping'].push(method);
+            categories['Shopping']!.push(method);
         } else if (name.includes('bank') || name.includes('deposit') || name.includes('withdraw')) {
-            categories['Banking'].push(method);
+            categories['Banking']!.push(method);
         } else if (name.includes('fletch') || name.includes('craft') || name.includes('smith')) {
-            categories['Crafting & Smithing'].push(method);
+            categories['Crafting & Smithing']!.push(method);
         } else if (name.includes('wait')) {
-            categories['Condition Waiting'].push(method);
+            categories['Condition Waiting']!.push(method);
         } else {
-            categories['Other'].push(method);
+            categories['Other']!.push(method);
         }
     }
 
@@ -315,19 +321,19 @@ function generateMarkdown(
     for (const method of sdkMethods) {
         const name = method.name.toLowerCase();
         if (name.startsWith('get') || name.startsWith('find') && !name.includes('path')) {
-            sdkCategories['State Access'].push(method);
+            sdkCategories['State Access']!.push(method);
         } else if (name.startsWith('scan')) {
-            sdkCategories['On-Demand Scanning'].push(method);
+            sdkCategories['On-Demand Scanning']!.push(method);
         } else if (name.startsWith('send')) {
-            sdkCategories['Raw Actions'].push(method);
+            sdkCategories['Raw Actions']!.push(method);
         } else if (name.includes('path')) {
-            sdkCategories['Pathfinding'].push(method);
+            sdkCategories['Pathfinding']!.push(method);
         } else if (name.includes('wait')) {
-            sdkCategories['Condition Waiting'].push(method);
+            sdkCategories['Condition Waiting']!.push(method);
         } else if (name.includes('connect') || name === 'isConnected' || name.includes('connection')) {
-            sdkCategories['Connection'].push(method);
+            sdkCategories['Connection']!.push(method);
         } else {
-            sdkCategories['Other'].push(method);
+            sdkCategories['Other']!.push(method);
         }
     }
 

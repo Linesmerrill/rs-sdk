@@ -73,9 +73,9 @@ Use explicit waypoints with 20-30 tile segments, with retry logic per waypoint.
 - **Known stuck points**: around (3260, 3277) and (3269, 3343) - terrain/collision issues
 
 ### 2. Process & Tooling Reflections
-- events.jsonl clearly showed where pathfinding failed
+- Console output clearly showed where pathfinding failed
 - Explicit waypoint names in logs make debugging easier
-- Progress tracking via `ctx.progress()` prevents stall detection during long walks
+- Bot actions auto-track progress during long walks
 
 ### 3. SDK Issues & Gaps
 - `walkTo` returns "No path found" rather than a more informative partial-progress message

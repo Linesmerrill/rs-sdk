@@ -251,7 +251,15 @@ export class BotSDK {
         }
 
         if (this.ws) {
-            this.ws.close();
+            // Wait for websocket to actually close
+            await new Promise<void>((resolve) => {
+                if (this.ws!.readyState === WebSocket.CLOSED) {
+                    resolve();
+                    return;
+                }
+                this.ws!.addEventListener('close', () => resolve(), { once: true });
+                this.ws!.close();
+            });
             this.ws = null;
         }
         this.connectPromise = null;

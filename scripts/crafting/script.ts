@@ -13,8 +13,9 @@
  * 7. Repeat as needed
  */
 
-import { runScript, TestPresets, StallError } from '../script-runner';
-import type { ScriptContext } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 import type { NearbyNpc } from '../../sdk/types';
 
 // Locations
@@ -43,7 +44,6 @@ interface CraftingStats {
     itemsCrafted: number;
     xpGained: number;
     startTime: number;
-    lastProgressTime: number;
 }
 
 // ============ Helper Functions ============
@@ -54,25 +54,25 @@ function getCoins(ctx: ScriptContext): number {
 }
 
 function getHideCount(ctx: ScriptContext): number {
-    return ctx.state()?.inventory.filter(i => /cow\s*hide/i.test(i.name))
+    return ctx.sdk.getState()?.inventory.filter(i => /cow\s*hide/i.test(i.name))
         .reduce((sum, i) => sum + i.count, 0) ?? 0;
 }
 
 function getLeatherCount(ctx: ScriptContext): number {
-    return ctx.state()?.inventory.filter(i => /^leather$/i.test(i.name))
+    return ctx.sdk.getState()?.inventory.filter(i => /^leather$/i.test(i.name))
         .reduce((sum, i) => sum + i.count, 0) ?? 0;
 }
 
 function getCraftingLevel(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Crafting')?.baseLevel ?? 1;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Crafting')?.baseLevel ?? 1;
 }
 
 function getCraftingXp(ctx: ScriptContext): number {
-    return ctx.state()?.skills.find(s => s.name === 'Crafting')?.experience ?? 0;
+    return ctx.sdk.getState()?.skills.find(s => s.name === 'Crafting')?.experience ?? 0;
 }
 
 function isInsideAlKharid(ctx: ScriptContext): boolean {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state?.player) return false;
     return state.player.worldX >= 3270;
 }
@@ -85,13 +85,10 @@ function hasThread(ctx: ScriptContext): boolean {
     return ctx.sdk.findInventoryItem(/thread/i) !== null;
 }
 
-// Note: ctx.progress() removed - bot actions and movement auto-reset stall timer
-
 async function dismissDialogs(ctx: ScriptContext, stats: CraftingStats): Promise<void> {
-    while (ctx.state()?.dialog.isOpen) {
+    while (ctx.sdk.getState()?.dialog.isOpen) {
         await ctx.sdk.sendClickDialog(0);
         await new Promise(r => setTimeout(r, 200));
-        // progress auto-tracked
     }
 }
 
@@ -107,7 +104,6 @@ async function getInitialCoins(ctx: ScriptContext, stats: CraftingStats): Promis
 
     // Walk to general store
     await ctx.bot.walkTo(LOCATIONS.LUMBRIDGE_GENERAL_STORE.x, LOCATIONS.LUMBRIDGE_GENERAL_STORE.z);
-    // progress auto-tracked
 
     // Open shop
     const openResult = await ctx.bot.openShop(/shop keeper/i);
@@ -116,14 +112,12 @@ async function getInitialCoins(ctx: ScriptContext, stats: CraftingStats): Promis
         return;
     }
     ctx.log('Shop opened');
-    // progress auto-tracked
 
     // Sell shortbow (worth ~20gp)
     const sellResult = await ctx.bot.sellToShop(/shortbow/i, 'all');
     if (sellResult.success) {
         ctx.log(sellResult.message);
     }
-    // progress auto-tracked
 
     // Close shop
     await ctx.bot.closeShop();
@@ -134,7 +128,7 @@ async function getInitialCoins(ctx: ScriptContext, stats: CraftingStats): Promis
 // ============ Phase 2: Collect Cowhides ============
 
 function findBestCow(ctx: ScriptContext): NearbyNpc | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return null;
 
     const cows = state.nearbyNpcs
@@ -163,14 +157,13 @@ async function waitForCombatEnd(
     while (Date.now() - startTime < maxWaitMs) {
         await new Promise(r => setTimeout(r, 400));
         loopCount++;
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (!state) return 'lost_target';
 
         // Dismiss level-up dialogs
         if (state.dialog.isOpen) {
             ctx.log('Dismissing dialog during combat...');
             await ctx.sdk.sendClickDialog(0);
-            // progress auto-tracked
             continue;
         }
 
@@ -203,8 +196,6 @@ async function waitForCombatEnd(
         } else if (loopCount >= 8) {
             return 'lost_target';
         }
-
-        // progress auto-tracked
     }
 
     return 'lost_target';
@@ -217,21 +208,18 @@ async function collectCowhides(ctx: ScriptContext, stats: CraftingStats, targetH
     const sword = ctx.sdk.findInventoryItem(/bronze sword/i);
     if (sword) {
         await ctx.bot.equipItem(sword);
-        // progress auto-tracked
     }
 
     const shield = ctx.sdk.findInventoryItem(/wooden shield/i);
     if (shield) {
         await ctx.bot.equipItem(shield);
-        // progress auto-tracked
     }
 
     // Walk to cow field
     await ctx.bot.walkTo(LOCATIONS.COW_FIELD.x, LOCATIONS.COW_FIELD.z);
-    // progress auto-tracked
 
     while (getHideCount(ctx) < targetHides) {
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (!state) break;
 
         // Check inventory space
@@ -250,13 +238,12 @@ async function collectCowhides(ctx: ScriptContext, stats: CraftingStats, targetH
             .sort((a, b) => a.distance - b.distance);
 
         for (const hide of groundHides.slice(0, 2)) {
-            if (ctx.state()!.inventory.length >= 28) break;
+            if (ctx.sdk.getState()!.inventory.length >= 28) break;
             const result = await ctx.bot.pickupItem(hide);
             if (result.success) {
                 stats.hidesCollected++;
                 ctx.log(`Picked up hide (total: ${getHideCount(ctx)})`);
             }
-            // progress auto-tracked
         }
 
         // Find cow to kill
@@ -267,7 +254,6 @@ async function collectCowhides(ctx: ScriptContext, stats: CraftingStats, targetH
                 LOCATIONS.COW_FIELD.x + (Math.random() - 0.5) * 20,
                 LOCATIONS.COW_FIELD.z + (Math.random() - 0.5) * 20
             );
-            // progress auto-tracked
             continue;
         }
 
@@ -287,7 +273,6 @@ async function collectCowhides(ctx: ScriptContext, stats: CraftingStats, targetH
                     ctx.log('Opened gate');
                 }
             }
-            // progress auto-tracked
             continue;
         }
 
@@ -297,7 +282,6 @@ async function collectCowhides(ctx: ScriptContext, stats: CraftingStats, targetH
             ctx.log(`Kill! Hides: ${getHideCount(ctx)}`);
             await new Promise(r => setTimeout(r, 600));
         }
-        // progress auto-tracked
     }
 
     ctx.log(`Collected ${getHideCount(ctx)} hides`);
@@ -307,7 +291,7 @@ async function collectCowhides(ctx: ScriptContext, stats: CraftingStats, targetH
 
 // Check if player is in the cow field area (fenced area)
 function isInCowField(ctx: ScriptContext): boolean {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state?.player) return false;
     const x = state.player.worldX;
     const z = state.player.worldZ;
@@ -322,7 +306,7 @@ async function exitCowField(ctx: ScriptContext, stats: CraftingStats): Promise<b
     // Try to find and open any nearby gate
     for (let attempt = 0; attempt < 5; attempt++) {
         // Look for a gate
-        const gate = ctx.state()?.nearbyLocs.find(l => /gate/i.test(l.name) && l.distance < 10);
+        const gate = ctx.sdk.getState()?.nearbyLocs.find(l => /gate/i.test(l.name) && l.distance < 10);
 
         if (gate) {
             const openOpt = gate.optionsWithIndex.find(o => /open/i.test(o.text));
@@ -330,7 +314,6 @@ async function exitCowField(ctx: ScriptContext, stats: CraftingStats): Promise<b
                 ctx.log(`Opening cow field gate at (${gate.x}, ${gate.z})`);
                 await ctx.sdk.sendInteractLoc(gate.x, gate.z, gate.id, openOpt.opIndex);
                 await new Promise(r => setTimeout(r, 800));
-                // progress auto-tracked
             }
         }
 
@@ -348,8 +331,6 @@ async function exitCowField(ctx: ScriptContext, stats: CraftingStats): Promise<b
                 ctx.log('Opened gate via openDoor');
             }
         }
-
-        // progress auto-tracked
     }
 
     return !isInCowField(ctx);
@@ -378,21 +359,19 @@ async function travelToAlKharid(ctx: ScriptContext, stats: CraftingStats): Promi
     }
 
     // Walk to gate - make sure we're at the correct position
-    ctx.log(`Walking to toll gate from (${ctx.state()?.player?.worldX}, ${ctx.state()?.player?.worldZ})`);
+    ctx.log(`Walking to toll gate from (${ctx.sdk.getState()?.player?.worldX}, ${ctx.sdk.getState()?.player?.worldZ})`);
     await ctx.bot.walkTo(LOCATIONS.TOLL_GATE.x, LOCATIONS.TOLL_GATE.z);
     await new Promise(r => setTimeout(r, 1000));  // Wait for pathfinding
-    // progress auto-tracked
 
     // Find and interact with gate
-    let gate = ctx.state()?.nearbyLocs.find(l => /gate/i.test(l.name) && l.distance < 15);
+    let gate = ctx.sdk.getState()?.nearbyLocs.find(l => /gate/i.test(l.name) && l.distance < 15);
 
     // If gate not found, try walking closer to known toll gate position
     if (!gate) {
         ctx.log('Gate not found, walking to exact toll gate position...');
         await ctx.bot.walkTo(3267, 3228);  // Exact toll gate position
         await new Promise(r => setTimeout(r, 1000));
-        // progress auto-tracked
-        gate = ctx.state()?.nearbyLocs.find(l => /gate/i.test(l.name) && l.distance < 15);
+        gate = ctx.sdk.getState()?.nearbyLocs.find(l => /gate/i.test(l.name) && l.distance < 15);
     }
     if (!gate) {
         ctx.warn('No gate found');
@@ -412,7 +391,7 @@ async function travelToAlKharid(ctx: ScriptContext, stats: CraftingStats): Promi
     // Handle toll dialog
     let paidToll = false;
     for (let i = 0; i < 20 && !paidToll; i++) {
-        const s = ctx.state();
+        const s = ctx.sdk.getState();
         if (!s?.dialog.isOpen) {
             await new Promise(r => setTimeout(r, 150));
             continue;
@@ -427,7 +406,6 @@ async function travelToAlKharid(ctx: ScriptContext, stats: CraftingStats): Promi
             await ctx.sdk.sendClickDialog(0);
         }
         await new Promise(r => setTimeout(r, 200));
-        // progress auto-tracked
     }
 
     // Wait and dismiss remaining dialogs
@@ -443,7 +421,6 @@ async function travelToAlKharid(ctx: ScriptContext, stats: CraftingStats): Promi
 
     const success = isInsideAlKharid(ctx);
     ctx.log(success ? 'Arrived in Al Kharid!' : 'Failed to enter Al Kharid');
-    // progress auto-tracked
     return success;
 }
 
@@ -459,14 +436,13 @@ async function buyCraftingSupplies(ctx: ScriptContext, stats: CraftingStats): Pr
 
     // Walk to craft shop
     await ctx.bot.walkTo(LOCATIONS.AL_KHARID_CRAFT_SHOP.x, LOCATIONS.AL_KHARID_CRAFT_SHOP.z);
-    // progress auto-tracked
 
     // Log player position for debugging
-    const pos = ctx.state()?.player;
+    const pos = ctx.sdk.getState()?.player;
     ctx.log(`Player at: (${pos?.worldX}, ${pos?.worldZ})`);
 
     // Log all nearby NPCs to find Dommik
-    const allNpcs = ctx.state()?.nearbyNpcs || [];
+    const allNpcs = ctx.sdk.getState()?.nearbyNpcs || [];
     ctx.log(`All NPCs nearby (${allNpcs.length}): ${allNpcs.slice(0, 15).map(n => `${n.name}(${n.distance})`).join(', ')}`);
 
     // Find Dommik the crafting shop owner
@@ -490,7 +466,6 @@ async function buyCraftingSupplies(ctx: ScriptContext, stats: CraftingStats): Pr
         for (const spot of searchSpots) {
             await ctx.bot.walkTo(spot.x, spot.z);
             await new Promise(r => setTimeout(r, 500));
-            // progress auto-tracked
 
             shopkeeper = ctx.sdk.findNearbyNpc(/^dommik$/i);
             if (shopkeeper) {
@@ -498,7 +473,7 @@ async function buyCraftingSupplies(ctx: ScriptContext, stats: CraftingStats): Pr
                 break;
             }
 
-            const npcs = ctx.state()?.nearbyNpcs.slice(0, 10).map(n => `${n.name}(${n.distance})`).join(', ') ?? 'none';
+            const npcs = ctx.sdk.getState()?.nearbyNpcs.slice(0, 10).map(n => `${n.name}(${n.distance})`).join(', ') ?? 'none';
             ctx.log(`At (${spot.x}, ${spot.z}): NPCs = ${npcs}`);
         }
     }
@@ -523,22 +498,21 @@ async function buyCraftingSupplies(ctx: ScriptContext, stats: CraftingStats): Pr
     // Wait for shop to open (longer wait - interaction will walk us closer)
     for (let i = 0; i < 50; i++) {
         await new Promise(r => setTimeout(r, 200));
-        // progress auto-tracked
 
         // Check for shop opening
-        if (ctx.state()?.shop.isOpen) break;
+        if (ctx.sdk.getState()?.shop.isOpen) break;
 
         // If dialog opened instead (Talk-to triggered), dismiss it
-        if (ctx.state()?.dialog.isOpen) {
+        if (ctx.sdk.getState()?.dialog.isOpen) {
             ctx.log('Dialog opened, clicking through...');
             await ctx.sdk.sendClickDialog(0);
             await new Promise(r => setTimeout(r, 200));
         }
     }
 
-    if (!ctx.state()?.shop.isOpen) {
+    if (!ctx.sdk.getState()?.shop.isOpen) {
         // Maybe we need to open a door first?
-        const door = ctx.state()?.nearbyLocs.find(l => /door/i.test(l.name) && l.distance < 5);
+        const door = ctx.sdk.getState()?.nearbyLocs.find(l => /door/i.test(l.name) && l.distance < 5);
         if (door) {
             ctx.log('Trying to open door...');
             const openOpt = door.optionsWithIndex.find(o => /open/i.test(o.text));
@@ -554,7 +528,7 @@ async function buyCraftingSupplies(ctx: ScriptContext, stats: CraftingStats): Pr
                         await ctx.sdk.sendInteractNpc(newShopkeeper.index, newTradeOpt.opIndex);
                         for (let i = 0; i < 30; i++) {
                             await new Promise(r => setTimeout(r, 200));
-                            if (ctx.state()?.shop.isOpen) break;
+                            if (ctx.sdk.getState()?.shop.isOpen) break;
                         }
                     }
                 }
@@ -562,13 +536,12 @@ async function buyCraftingSupplies(ctx: ScriptContext, stats: CraftingStats): Pr
         }
     }
 
-    if (!ctx.state()?.shop.isOpen) {
+    if (!ctx.sdk.getState()?.shop.isOpen) {
         ctx.warn('Shop still did not open');
         return false;
     }
 
-    ctx.log(`Shop opened: ${ctx.state()?.shop.title}`);
-    // progress auto-tracked
+    ctx.log(`Shop opened: ${ctx.sdk.getState()?.shop.title}`);
 
     // Buy needle if needed
     if (!hasNeedle(ctx)) {
@@ -583,7 +556,6 @@ async function buyCraftingSupplies(ctx: ScriptContext, stats: CraftingStats): Pr
     }
 
     await ctx.bot.closeShop();
-    // progress auto-tracked
 
     return hasNeedle(ctx) && hasThread(ctx);
 }
@@ -601,12 +573,11 @@ async function tanHides(ctx: ScriptContext, stats: CraftingStats): Promise<void>
 
     // Walk to tanner
     await ctx.bot.walkTo(LOCATIONS.AL_KHARID_TANNER.x, LOCATIONS.AL_KHARID_TANNER.z);
-    // progress auto-tracked
 
     // Find the tanner
     const tanner = ctx.sdk.findNearbyNpc(/^tanner$/i);
     if (!tanner) {
-        const npcs = ctx.state()?.nearbyNpcs.slice(0, 5).map(n => `${n.name}(${n.options.join('/')})`).join(', ') ?? 'none';
+        const npcs = ctx.sdk.getState()?.nearbyNpcs.slice(0, 5).map(n => `${n.name}(${n.options.join('/')})`).join(', ') ?? 'none';
         ctx.warn(`No tanner found. Nearby NPCs: ${npcs}`);
         return;
     }
@@ -626,14 +597,13 @@ async function tanHides(ctx: ScriptContext, stats: CraftingStats): Promise<void>
     // Wait for dialog - game will auto-walk if needed
     for (let i = 0; i < 50; i++) {
         await new Promise(r => setTimeout(r, 200));
-        // progress auto-tracked
-        if (ctx.state()?.dialog?.isOpen) break;
+        if (ctx.sdk.getState()?.dialog?.isOpen) break;
     }
 
-    if (!ctx.state()?.dialog?.isOpen) {
+    if (!ctx.sdk.getState()?.dialog?.isOpen) {
         ctx.warn('Dialog did not open with tanner');
         // Log current state
-        const player = ctx.state()?.player;
+        const player = ctx.sdk.getState()?.player;
         ctx.log(`Player at (${player?.worldX}, ${player?.worldZ})`);
         return;
     }
@@ -646,9 +616,8 @@ async function tanHides(ctx: ScriptContext, stats: CraftingStats): Promise<void>
     // 3. Select "Soft leather" option
     for (let i = 0; i < 50; i++) {
         await new Promise(r => setTimeout(r, 400));
-        // progress auto-tracked
 
-        const s = ctx.state();
+        const s = ctx.sdk.getState();
         if (!s?.dialog?.isOpen) {
             // Dialog closed - tanning should be complete
             ctx.log('Dialog closed');
@@ -695,7 +664,6 @@ async function tanHides(ctx: ScriptContext, stats: CraftingStats): Promise<void>
     const hidesLeft = getHideCount(ctx);
     stats.hidesTanned += leather;
     ctx.log(`Tanning complete. Leather: ${leather}, Hides remaining: ${hidesLeft}`);
-    // progress auto-tracked
 }
 
 // ============ Phase 6: Craft Leather Items ============
@@ -719,7 +687,6 @@ async function craftLeatherItems(ctx: ScriptContext, stats: CraftingStats): Prom
             ctx.log(`${result.message}`);
             stats.itemsCrafted += result.itemsCrafted ?? 1;
             stats.xpGained += result.xpGained ?? 0;
-            // progress auto-tracked
         } else {
             ctx.warn(`Craft failed: ${result.message} (reason: ${result.reason})`);
 
@@ -751,7 +718,6 @@ async function craftLeatherItems(ctx: ScriptContext, stats: CraftingStats): Prom
                 ctx.log(`Retry succeeded: ${retry.message}`);
                 stats.itemsCrafted += retry.itemsCrafted ?? 1;
                 stats.xpGained += retry.xpGained ?? 0;
-                // progress auto-tracked
             }
         }
 
@@ -761,7 +727,6 @@ async function craftLeatherItems(ctx: ScriptContext, stats: CraftingStats): Prom
 
     const totalXpGained = getCraftingXp(ctx) - xpBefore;
     ctx.log(`Crafting complete. Total: +${totalXpGained} XP. Level: ${getCraftingLevel(ctx)}`);
-    // progress auto-tracked
 }
 
 // ============ Phase 7: Bank and Repeat ============
@@ -770,7 +735,6 @@ async function bankItems(ctx: ScriptContext, stats: CraftingStats): Promise<void
     ctx.log('Banking items...');
 
     await ctx.bot.walkTo(LOCATIONS.AL_KHARID_BANK.x, LOCATIONS.AL_KHARID_BANK.z);
-    // progress auto-tracked
 
     const openResult = await ctx.bot.openBank();
     if (!openResult.success) {
@@ -779,7 +743,7 @@ async function bankItems(ctx: ScriptContext, stats: CraftingStats): Promise<void
     }
 
     // Deposit crafted items (leather gloves, etc.)
-    const craftedItems = ctx.state()?.inventory.filter(i =>
+    const craftedItems = ctx.sdk.getState()?.inventory.filter(i =>
         /gloves|boots|vamb|chaps|body|cowl/i.test(i.name) && /leather/i.test(i.name)
     ) ?? [];
 
@@ -789,13 +753,12 @@ async function bankItems(ctx: ScriptContext, stats: CraftingStats): Promise<void
     }
 
     await ctx.bot.closeBank();
-    // progress auto-tracked
 }
 
 // ============ Main Loop ============
 
 async function craftingLoop(ctx: ScriptContext): Promise<void> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) throw new Error('No initial state');
 
     const stats: CraftingStats = {
@@ -804,7 +767,6 @@ async function craftingLoop(ctx: ScriptContext): Promise<void> {
         itemsCrafted: 0,
         xpGained: 0,
         startTime: Date.now(),
-        lastProgressTime: Date.now(),
     };
 
     ctx.log('=== Crafting Training Script ===');
@@ -830,7 +792,7 @@ async function craftingLoop(ctx: ScriptContext): Promise<void> {
         if (!isInsideAlKharid(ctx)) {
             const success = await travelToAlKharid(ctx, stats);
             if (!success) {
-                throw new StallError('Could not travel to Al Kharid');
+                throw new Error('Could not travel to Al Kharid');
             }
         }
 
@@ -838,7 +800,7 @@ async function craftingLoop(ctx: ScriptContext): Promise<void> {
         if (!hasNeedle(ctx) || !hasThread(ctx)) {
             const success = await buyCraftingSupplies(ctx, stats);
             if (!success) {
-                throw new StallError('Could not buy crafting supplies');
+                throw new Error('Could not buy crafting supplies');
             }
         }
 
@@ -853,7 +815,7 @@ async function craftingLoop(ctx: ScriptContext): Promise<void> {
         }
 
         // Bank crafted items if inventory is getting full
-        if (ctx.state()!.inventory.length >= 25) {
+        if (ctx.sdk.getState()!.inventory.length >= 25) {
             await bankItems(ctx, stats);
         }
 
@@ -864,7 +826,6 @@ async function craftingLoop(ctx: ScriptContext): Promise<void> {
             await ctx.bot.walkTo(LOCATIONS.TOLL_GATE.x, LOCATIONS.TOLL_GATE.z);
             // Walk to Lumbridge side
             await ctx.bot.walkTo(3260, 3228);
-            // progress auto-tracked
         }
     }
 
@@ -879,22 +840,30 @@ async function craftingLoop(ctx: ScriptContext): Promise<void> {
     ctx.log(`Final level: ${getCraftingLevel(ctx)}`);
 }
 
-// Run the script
-runScript({
-    name: 'crafting',
-    goal: 'Train Crafting from level 1 to level 10',
-    preset: TestPresets.LUMBRIDGE_SPAWN,
-    timeLimit: 30 * 60 * 1000,  // 30 minutes (leather crafting takes time)
-    stallTimeout: 60_000,       // 60 seconds (combat/walking takes time)
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
+// Main script
+async function main() {
+    // Create fresh account
+    const username = `cr${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
+
+    // Launch browser
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
+
     try {
-        await craftingLoop(ctx);
-    } catch (e) {
-        if (e instanceof StallError) {
-            ctx.error(`Script aborted: ${e.message}`);
-        } else {
-            throw e;
-        }
+        await runScript(async (ctx) => {
+            try {
+                await craftingLoop(ctx);
+            } catch (e) {
+                ctx.error(`Script aborted: ${e instanceof Error ? e.message : String(e)}`);
+                throw e;
+            }
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 30 * 60 * 1000,  // 30 minutes (leather crafting takes time)
+        });
+    } finally {
+        await session.cleanup();
     }
-});
+}
+
+main().catch(console.error);

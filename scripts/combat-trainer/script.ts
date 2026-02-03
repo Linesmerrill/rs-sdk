@@ -11,8 +11,9 @@
  * - Cycle combat styles for balanced Attack/Strength/Defence training
  */
 
-import { runScript, TestPresets } from '../script-runner';
-import type { ScriptContext } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 import type { NearbyNpc } from '../../sdk/types';
 
 // Combat style indices for swords (4 styles: Stab, Lunge, Slash, Block)
@@ -105,7 +106,7 @@ interface CombatStats {
  * Cows are level 2, easy targets that drop valuable hides.
  */
 function findBestTarget(ctx: ScriptContext): NearbyNpc | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return null;
 
     const targets = state.nearbyNpcs
@@ -134,7 +135,7 @@ function findBestTarget(ctx: ScriptContext): NearbyNpc | null {
  * Check if we should eat food based on HP
  */
 function shouldEat(ctx: ScriptContext): boolean {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return false;
 
     const hp = state.skills.find(s => s.name === 'Hitpoints');
@@ -253,13 +254,13 @@ async function waitForCombatEnd(
     targetNpc: NearbyNpc,
     stats: CombatStats
 ): Promise<'kill' | 'fled' | 'lost_target' | 'need_heal'> {
-    let lastSeenTick = ctx.state()?.tick ?? 0;
+    let lastSeenTick = ctx.sdk.getState()?.tick ?? 0;
     let combatStarted = false;
     let ticksSinceCombatEnded = 0;
     let loopCount = 0;
 
     // Track starting XP to detect combat via XP gains
-    const startState = ctx.state();
+    const startState = ctx.sdk.getState();
     const startXp = {
         def: startState?.skills.find(s => s.name === 'Defence')?.experience ?? 0,
         hp: startState?.skills.find(s => s.name === 'Hitpoints')?.experience ?? 0,
@@ -275,7 +276,7 @@ async function waitForCombatEnd(
     while (Date.now() - startTime < maxWaitMs) {
         await new Promise(r => setTimeout(r, 400));
         loopCount++;
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (!state) return 'lost_target';
 
         const currentTick = state.tick;
@@ -427,7 +428,7 @@ async function buyIronScimitar(ctx: ScriptContext, stats: CombatStats): Promise<
 
     // Handle toll gate
     ctx.log('Opening toll gate...');
-    const gate = ctx.state()?.nearbyLocs.find(l => /gate/i.test(l.name));
+    const gate = ctx.sdk.getState()?.nearbyLocs.find(l => /gate/i.test(l.name));
     if (gate) {
         const openOpt = gate.optionsWithIndex.find(o => /open/i.test(o.text));
         if (openOpt) {
@@ -438,7 +439,7 @@ async function buyIronScimitar(ctx: ScriptContext, stats: CombatStats): Promise<
 
     // Handle gate dialog
     for (let i = 0; i < 20; i++) {
-        const s = ctx.state();
+        const s = ctx.sdk.getState();
         if (!s?.dialog.isOpen) {
             await new Promise(r => setTimeout(r, 150));
             continue;
@@ -456,7 +457,7 @@ async function buyIronScimitar(ctx: ScriptContext, stats: CombatStats): Promise<
     // Walk through gate
     await new Promise(r => setTimeout(r, 1000));
     for (let i = 0; i < 10; i++) {
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if ((state?.player?.worldX ?? 0) >= 3270) {
             ctx.log('Entered Al Kharid!');
             break;
@@ -471,7 +472,7 @@ async function buyIronScimitar(ctx: ScriptContext, stats: CombatStats): Promise<
     }
 
     // Verify in Al Kharid
-    if ((ctx.state()?.player?.worldX ?? 0) < 3270) {
+    if ((ctx.sdk.getState()?.player?.worldX ?? 0) < 3270) {
         ctx.warn('Failed to enter Al Kharid');
         stats.phase = 'farming';
         return false;
@@ -521,7 +522,7 @@ async function buyIronScimitar(ctx: ScriptContext, stats: CombatStats): Promise<
  * Main combat training loop - Cow Hide Strategy
  */
 async function combatTrainingLoop(ctx: ScriptContext): Promise<void> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) throw new Error('No initial state');
 
     // Initialize stats tracking
@@ -573,7 +574,7 @@ async function combatTrainingLoop(ctx: ScriptContext): Promise<void> {
 
     // Main training loop
     while (true) {
-        const currentState = ctx.state();
+        const currentState = ctx.sdk.getState();
         if (!currentState) {
             ctx.warn('Lost game state');
             break;
@@ -716,7 +717,7 @@ async function combatTrainingLoop(ctx: ScriptContext): Promise<void> {
  * Log current training statistics
  */
 function logStats(ctx: ScriptContext, stats: CombatStats): void {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return;
 
     const currentXp = {
@@ -748,37 +749,47 @@ function logStats(ctx: ScriptContext, stats: CombatStats): void {
     ctx.log(`Weapon: ${stats.weaponUpgraded ? 'IRON SCIMITAR!' : 'Bronze Sword'}`);
 }
 
-// Run the script with standard tutorial-complete items
-runScript({
-    name: 'combat-trainer',
-    goal: 'Kill cows for hides, sell for coins, buy iron scimitar, train combat',
-    preset: TestPresets.LUMBRIDGE_SPAWN,
-    timeLimit: 30 * 60 * 1000,  // 30 minutes
-    stallTimeout: 120_000,      // 120 seconds (for shop/gate interactions)
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
-    try {
-        await combatTrainingLoop(ctx);
-    } finally {
-        // Log final stats
-        const state = ctx.state();
-        if (state) {
-            const skills = state.skills;
-            const atk = skills.find(s => s.name === 'Attack');
-            const str = skills.find(s => s.name === 'Strength');
-            const def = skills.find(s => s.name === 'Defence');
-            const hp = skills.find(s => s.name === 'Hitpoints');
-            const scimitar = ctx.sdk.findInventoryItem(/iron scimitar/i) ||
-                            state.equipment?.find(e => /iron scimitar/i.test(e.name));
+async function main() {
+    // Create fresh account
+    const username = `CT${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
 
-            ctx.log('=== Final Results ===');
-            ctx.log(`Combat Level: ${state.player?.combatLevel ?? '?'}`);
-            ctx.log(`Attack: Level ${atk?.baseLevel} (${atk?.experience} XP)`);
-            ctx.log(`Strength: Level ${str?.baseLevel} (${str?.experience} XP)`);
-            ctx.log(`Defence: Level ${def?.baseLevel} (${def?.experience} XP)`);
-            ctx.log(`Hitpoints: Level ${hp?.baseLevel} (${hp?.experience} XP)`);
-            ctx.log(`Iron Scimitar: ${scimitar ? 'YES!' : 'No'}`);
-            ctx.log(`Position: (${state.player?.worldX}, ${state.player?.worldZ})`);
-        }
+    // Launch browser
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
+
+    try {
+        await runScript(async (ctx) => {
+            try {
+                await combatTrainingLoop(ctx);
+            } finally {
+                // Log final stats
+                const state = ctx.sdk.getState();
+                if (state) {
+                    const skills = state.skills;
+                    const atk = skills.find(s => s.name === 'Attack');
+                    const str = skills.find(s => s.name === 'Strength');
+                    const def = skills.find(s => s.name === 'Defence');
+                    const hp = skills.find(s => s.name === 'Hitpoints');
+                    const scimitar = ctx.sdk.findInventoryItem(/iron scimitar/i) ||
+                                    state.equipment?.find(e => /iron scimitar/i.test(e.name));
+
+                    ctx.log('=== Final Results ===');
+                    ctx.log(`Combat Level: ${state.player?.combatLevel ?? '?'}`);
+                    ctx.log(`Attack: Level ${atk?.baseLevel} (${atk?.experience} XP)`);
+                    ctx.log(`Strength: Level ${str?.baseLevel} (${str?.experience} XP)`);
+                    ctx.log(`Defence: Level ${def?.baseLevel} (${def?.experience} XP)`);
+                    ctx.log(`Hitpoints: Level ${hp?.baseLevel} (${hp?.experience} XP)`);
+                    ctx.log(`Iron Scimitar: ${scimitar ? 'YES!' : 'No'}`);
+                    ctx.log(`Position: (${state.player?.worldX}, ${state.player?.worldZ})`);
+                }
+            }
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 30 * 60 * 1000,
+        });
+    } finally {
+        await session.cleanup();
     }
-});
+}
+
+main().catch(console.error);

@@ -93,7 +93,7 @@ Training Cooking from level 1 to 10+ starting from Lumbridge spawn.
 1. **Keep more food**: Don't drop bread/shrimps, or buy more food
 2. **Safer position**: Test positions farther north from scorpions
 3. **Run away logic**: Move to safe area when HP critical
-4. **Retry on disconnect**: Add reconnection handling in script-runner
+4. **Retry on disconnect**: Add reconnection handling in sdk/runner
 
 ---
 

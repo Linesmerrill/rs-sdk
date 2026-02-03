@@ -16,8 +16,9 @@
  * v11 Target: 350+ GP with Farmers only, optimized zone handling
  */
 
-import { runScript, TestPresets } from '../script-runner';
-import type { ScriptContext } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 import type { NearbyNpc } from '../../sdk/types';
 
 // Thieving stats tracking
@@ -64,7 +65,7 @@ interface SetupState {
  */
 async function walkToWithDoors(ctx: ScriptContext, destX: number, destZ: number, maxAttempts: number = 5): Promise<boolean> {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (!state?.player) return false;
 
         // Check if we're close enough
@@ -78,7 +79,7 @@ async function walkToWithDoors(ctx: ScriptContext, destX: number, destZ: number,
         const walkResult = await ctx.bot.walkTo(destX, destZ);
 
         // Check if we made progress
-        const stateAfter = ctx.state();
+        const stateAfter = ctx.sdk.getState();
         if (stateAfter?.player) {
             const dxAfter = Math.abs(stateAfter.player.worldX - destX);
             const dzAfter = Math.abs(stateAfter.player.worldZ - destZ);
@@ -118,7 +119,7 @@ async function walkToWithDoors(ctx: ScriptContext, destX: number, destZ: number,
  * Check if we're in Al-Kharid (x >= 3270)
  */
 function isInAlKharid(ctx: ScriptContext): boolean {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     return (state?.player?.worldX ?? 0) >= 3270;
 }
 
@@ -172,7 +173,7 @@ async function payTollAndEnterAlKharid(ctx: ScriptContext): Promise<boolean> {
     await walkToWithDoors(ctx, LOCATIONS.alKharidTollGate.x, LOCATIONS.alKharidTollGate.z);
 
     // Find and click the gate
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     const gate = state?.nearbyLocs.find(l => /gate/i.test(l.name));
     if (!gate) {
         ctx.warn('Cannot find toll gate');
@@ -191,7 +192,7 @@ async function payTollAndEnterAlKharid(ctx: ScriptContext): Promise<boolean> {
 
     // Handle dialog - click through until "Yes" option appears
     for (let i = 0; i < 20; i++) {
-        const s = ctx.state();
+        const s = ctx.sdk.getState();
         if (!s?.dialog.isOpen) {
             await new Promise(r => setTimeout(r, 150));
             continue;
@@ -208,7 +209,7 @@ async function payTollAndEnterAlKharid(ctx: ScriptContext): Promise<boolean> {
 
     // Dismiss any remaining dialogs
     for (let i = 0; i < 5; i++) {
-        const s = ctx.state();
+        const s = ctx.sdk.getState();
         if (!s?.dialog.isOpen) break;
         await ctx.sdk.sendClickDialog(0);
         await new Promise(r => setTimeout(r, 200));
@@ -271,7 +272,7 @@ async function buyKebabs(ctx: ScriptContext, quantity: number = 5): Promise<bool
         // Handle dialog - click through and select "Yes please."
         let bought = false;
         for (let j = 0; j < 15; j++) {
-            const s = ctx.state();
+            const s = ctx.sdk.getState();
             if (!s?.dialog.isOpen) {
                 await new Promise(r => setTimeout(r, 200));
                 continue;
@@ -288,14 +289,14 @@ async function buyKebabs(ctx: ScriptContext, quantity: number = 5): Promise<bool
 
             // Check if dialog closed after buying
             if (bought) {
-                const sAfter = ctx.state();
+                const sAfter = ctx.sdk.getState();
                 if (!sAfter?.dialog.isOpen) break;
             }
         }
 
         // Dismiss any remaining dialogs
         for (let j = 0; j < 3; j++) {
-            const s = ctx.state();
+            const s = ctx.sdk.getState();
             if (!s?.dialog.isOpen) break;
             await ctx.sdk.sendClickDialog(0);
             await new Promise(r => setTimeout(r, 200));
@@ -328,7 +329,7 @@ function getBestZone(thievingLevel: number) {
  * v11: Larger radius (40 tiles) to avoid constant zone re-entry
  */
 function isInZone(ctx: ScriptContext, zone: typeof ZONES.lumbridge): boolean {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state?.player) return false;
     const dx = Math.abs(state.player.worldX - zone.x);
     const dz = Math.abs(state.player.worldZ - zone.z);
@@ -339,7 +340,7 @@ function isInZone(ctx: ScriptContext, zone: typeof ZONES.lumbridge): boolean {
  * Find nearest pickpocket target matching the pattern
  */
 function findPickpocketTarget(ctx: ScriptContext, pattern: RegExp): NearbyNpc | null {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return null;
 
     const targets = state.nearbyNpcs
@@ -355,7 +356,7 @@ function findPickpocketTarget(ctx: ScriptContext, pattern: RegExp): NearbyNpc | 
  * Check if we should eat food based on HP
  */
 function shouldEat(ctx: ScriptContext): boolean {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return false;
 
     const hp = state.skills.find(s => s.name === 'Hitpoints');
@@ -392,7 +393,7 @@ async function attemptPickpocket(
     target: NearbyNpc,
     stats: ThievingStats
 ): Promise<'success' | 'failed' | 'stunned' | 'error'> {
-    const startTick = ctx.state()?.tick ?? 0;
+    const startTick = ctx.sdk.getState()?.tick ?? 0;
     const coinsBefore = countCoins(ctx);
 
     // Find the Pickpocket option
@@ -440,7 +441,7 @@ async function attemptPickpocket(
         }, 5000);
 
         // Check what happened
-        const currentState = ctx.state();
+        const currentState = ctx.sdk.getState();
         if (!currentState) return 'error';
 
         const coinsAfter = countCoins(ctx);
@@ -479,7 +480,7 @@ async function attemptPickpocket(
  * Main thieving loop
  */
 async function thievingLoop(ctx: ScriptContext): Promise<void> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) throw new Error('No initial state');
 
     // Initialize stats
@@ -508,7 +509,7 @@ async function thievingLoop(ctx: ScriptContext): Promise<void> {
 
     // Main loop
     while (true) {
-        const currentState = ctx.state();
+        const currentState = ctx.sdk.getState();
         if (!currentState) {
             ctx.warn('Lost game state');
             break;
@@ -586,7 +587,7 @@ async function thievingLoop(ctx: ScriptContext): Promise<void> {
  * Log current thieving statistics
  */
 function logStats(ctx: ScriptContext, stats: ThievingStats): void {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return;
 
     const currentThievingXp = state.skills.find(s => s.name === 'Thieving')?.experience ?? 0;
@@ -603,28 +604,36 @@ function logStats(ctx: ScriptContext, stats: ThievingStats): void {
     ctx.log(`Time stunned: ${(stats.stunTimeMs / 1000).toFixed(1)}s`);
 }
 
-// Run the script with standard tutorial-complete loadout
-runScript({
-    name: 'thieving-gp',
-    goal: 'Maximize coins earned through thieving in 5 minutes',
-    preset: TestPresets.LUMBRIDGE_SPAWN,  // Standard post-tutorial items including bread
-    timeLimit: 5 * 60 * 1000,  // 5 minutes
-    stallTimeout: 30_000,      // 30 seconds (includes stun time)
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
-    try {
-        await thievingLoop(ctx);
-    } finally {
-        // Log final stats
-        const state = ctx.state();
-        if (state) {
-            const startThievingXp = 0;  // We start at 0
-            const thieving = state.skills.find(s => s.name === 'Thieving');
-            const coins = ctx.sdk.findInventoryItem(/^coins$/i);
+// Main script
+async function main() {
+    const username = `tg${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
 
-            ctx.log('=== Final Results ===');
-            ctx.log(`Thieving: Level ${thieving?.baseLevel ?? 1} (${thieving?.experience ?? 0} XP)`);
-            ctx.log(`Total coins in inventory: ${coins?.count ?? 0}`);
-        }
+    try {
+        await runScript(async (ctx) => {
+            try {
+                await thievingLoop(ctx);
+            } finally {
+                // Log final stats
+                const state = ctx.sdk.getState();
+                if (state) {
+                    const startThievingXp = 0;  // We start at 0
+                    const thieving = state.skills.find(s => s.name === 'Thieving');
+                    const coins = ctx.sdk.findInventoryItem(/^coins$/i);
+
+                    ctx.log('=== Final Results ===');
+                    ctx.log(`Thieving: Level ${thieving?.baseLevel ?? 1} (${thieving?.experience ?? 0} XP)`);
+                    ctx.log(`Total coins in inventory: ${coins?.count ?? 0}`);
+                }
+            }
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 5 * 60 * 1000,  // 5 minutes
+        });
+    } finally {
+        await session.cleanup();
     }
-});
+}
+
+main().catch(console.error);

@@ -14,7 +14,9 @@
  * - No need to sell items or pay toll
  */
 
-import { runScript, TestPresets, type ScriptContext } from '../script-runner';
+import { runScript, type ScriptContext } from '../../sdk/runner';
+import { generateSave, TestPresets } from '../../test/utils/save-generator';
+import { launchBotWithSDK } from '../../test/utils/browser';
 
 // SE Varrock mine - has copper and tin, no aggressive monsters
 const TARGET_MINE = { x: 3285, z: 3365 };
@@ -32,7 +34,7 @@ const WAYPOINTS_TO_MINE = [
 
 // Get mining level and XP
 function getMiningStats(ctx: ScriptContext): { level: number; xp: number } {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     const mining = state?.skills.find(s => s.name === 'Mining');
     return {
         level: mining?.baseLevel ?? 1,
@@ -43,7 +45,7 @@ function getMiningStats(ctx: ScriptContext): { level: number; xp: number } {
 // Log mining progress
 function logProgress(ctx: ScriptContext, label: string): void {
     const stats = getMiningStats(ctx);
-    const invCount = ctx.state()?.inventory.length ?? 0;
+    const invCount = ctx.sdk.getState()?.inventory.length ?? 0;
     ctx.log(`[${label}] Mining Lv${stats.level} (${stats.xp} XP) | Inv: ${invCount}/28`);
 }
 
@@ -61,7 +63,7 @@ interface RockInfo {
 
 // Find all nearby rocks with Mine option
 function findRocks(ctx: ScriptContext): RockInfo[] {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return [];
 
     const rocks: RockInfo[] = [];
@@ -89,7 +91,7 @@ function findRocks(ctx: ScriptContext): RockInfo[] {
 // Prospect a rock to find ore type
 async function prospectRock(ctx: ScriptContext, rock: RockInfo): Promise<string | null> {
     const { sdk, log } = ctx;
-    const startTick = ctx.state()?.tick ?? 0;
+    const startTick = ctx.sdk.getState()?.tick ?? 0;
 
     await sdk.sendInteractLoc(rock.x, rock.z, rock.id, rock.prospectOpIndex);
 
@@ -156,7 +158,7 @@ function canMineOre(oreType: string, miningLevel: number): boolean {
 
 // Drop all ore from inventory
 async function dropOre(ctx: ScriptContext): Promise<number> {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     if (!state) return 0;
 
     let dropped = 0;
@@ -172,7 +174,7 @@ async function dropOre(ctx: ScriptContext): Promise<number> {
 
 // Check if inventory is full
 function isInventoryFull(ctx: ScriptContext): boolean {
-    const state = ctx.state();
+    const state = ctx.sdk.getState();
     return (state?.inventory.length ?? 0) >= 28;
 }
 
@@ -183,11 +185,11 @@ async function walkSmallSteps(
     targetZ: number,
     stepSize: number = 12
 ): Promise<{ x: number; z: number }> {
-    const { sdk, log, progress } = ctx;
+    const { sdk, log } = ctx;
 
     const MAX_STEPS = 20;
     for (let step = 0; step < MAX_STEPS; step++) {
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         if (!state?.player) break;
 
         const currentX = state.player.worldX;
@@ -208,10 +210,9 @@ async function walkSmallSteps(
 
         // Wait for movement
         await new Promise(r => setTimeout(r, 800));
-        progress();
 
         // Check if we moved
-        const newState = ctx.state();
+        const newState = ctx.sdk.getState();
         if (newState?.player) {
             const movedDist = Math.sqrt(
                 Math.pow(newState.player.worldX - currentX, 2) +
@@ -227,7 +228,7 @@ async function walkSmallSteps(
         }
     }
 
-    const finalState = ctx.state();
+    const finalState = ctx.sdk.getState();
     return {
         x: finalState?.player?.worldX ?? 0,
         z: finalState?.player?.worldZ ?? 0
@@ -241,12 +242,12 @@ async function walkWithWaypoints(
     waypoints: Array<{ x: number; z: number }>,
     label: string
 ): Promise<{ foundRocks: boolean }> {
-    const { bot, sdk, log, progress } = ctx;
+    const { bot, sdk, log } = ctx;
 
     for (let i = 0; i < waypoints.length; i++) {
         const wp = waypoints[i];
         if (!wp) continue;
-        const state = ctx.state();
+        const state = ctx.sdk.getState();
         const playerPos = state?.player ? `(${state.player.worldX}, ${state.player.worldZ})` : '?';
         log(`Walking to waypoint ${i + 1}/${waypoints.length}: (${wp.x}, ${wp.z}) from ${playerPos}`);
 
@@ -255,9 +256,8 @@ async function walkWithWaypoints(
 
         // Try bot.walkTo first (uses server pathfinder)
         const result = await bot.walkTo(wp.x, wp.z);
-        progress();
 
-        let newState = ctx.state();
+        let newState = ctx.sdk.getState();
         let currentX = newState?.player?.worldX ?? 0;
         let currentZ = newState?.player?.worldZ ?? 0;
         let dist = Math.sqrt(Math.pow(wp.x - currentX, 2) + Math.pow(wp.z - currentZ, 2));
@@ -279,255 +279,257 @@ async function walkWithWaypoints(
         await new Promise(r => setTimeout(r, 300));
     }
 
-    const finalState = ctx.state();
+    const finalState = ctx.sdk.getState();
     const finalPos = finalState?.player ? `(${finalState.player.worldX}, ${finalState.player.worldZ})` : '?';
     log(`${label} - final position: ${finalPos}`);
     return { foundRocks: false };
 }
 
-runScript({
-    name: 'mining-trainer',
-    goal: 'Maximize Mining level in 5 minutes',
-    preset: TestPresets.LUMBRIDGE_SPAWN,  // Standard post-tutorial start
-    timeLimit: 5 * 60 * 1000,  // 5 minutes
-    stallTimeout: 45_000,      // 45 seconds (mining can be slow)
-    launchOptions: { usePuppeteer: true },
-}, async (ctx) => {
-    const { bot, sdk, log, progress } = ctx;
+async function main() {
+    // Create fresh account
+    const username = `mn${Math.random().toString(36).slice(2, 7)}`;
+    await generateSave(username, TestPresets.LUMBRIDGE_SPAWN);
 
-    // Log initial state
-    logProgress(ctx, 'START');
-    let oresMined = 0;
-    let lastXp = getMiningStats(ctx).xp;
+    // Launch browser
+    const session = await launchBotWithSDK(username, { usePuppeteer: true });
 
-    // Check for pickaxe
-    let pickaxe = sdk.findInventoryItem(/pickaxe/i);
-    if (!pickaxe) {
-        // Check if already equipped
-        pickaxe = sdk.findEquipmentItem(/pickaxe/i);
-        if (!pickaxe) {
-            log('ERROR: No pickaxe in inventory or equipped!');
-            return;
-        }
-        log(`Found ${pickaxe.name} already equipped`);
-    } else {
-        log(`Found ${pickaxe.name} in inventory - equipping it...`);
-        const equipResult = await bot.equipItem(pickaxe);
-        if (equipResult.success) {
-            log('Pickaxe equipped!');
-        } else {
-            log(`Failed to equip pickaxe: ${equipResult.message} - will try mining anyway`);
-        }
-    }
-    progress();
+    try {
+        await runScript(async (ctx) => {
+            const { bot, sdk, log } = ctx;
 
-    // Walk to SE Varrock mine (safer than Al Kharid - no scorpions)
-    log('Walking to SE Varrock mine...');
-    await walkWithWaypoints(ctx, WAYPOINTS_TO_MINE, 'ARRIVED AT MINE');
+            // Log initial state
+            logProgress(ctx, 'START');
+            let oresMined = 0;
+            let lastXp = getMiningStats(ctx).xp;
 
-    // Check current position and look for rocks
-    const posState = ctx.state();
-    const currentPos = posState?.player
-        ? { x: posState.player.worldX, z: posState.player.worldZ }
-        : TARGET_MINE;
-
-    // Update mine location to where we actually ended up (for drift detection)
-    const actualMineLocation = { ...currentPos };
-
-    // Look for rocks in the area - if none found, try walking around
-    let rocks = findRocks(ctx);
-    if (rocks.length === 0) {
-        log(`No rocks at (${currentPos.x}, ${currentPos.z}), searching nearby...`);
-        // Try walking to nearby locations to find rocks
-        const searchOffsets = [
-            { x: -10, z: 0 }, { x: 10, z: 0 },
-            { x: 0, z: -10 }, { x: 0, z: 10 },
-            { x: -15, z: -15 }, { x: 15, z: -15 },
-        ];
-        for (const offset of searchOffsets) {
-            const searchX = currentPos.x + offset.x;
-            const searchZ = currentPos.z + offset.z;
-            log(`Searching at (${searchX}, ${searchZ})...`);
-            await walkSmallSteps(ctx, searchX, searchZ, 8);
-            progress();
-
-            rocks = findRocks(ctx);
-            if (rocks.length > 0) {
-                const newPos = ctx.state()?.player;
-                if (newPos) {
-                    actualMineLocation.x = newPos.worldX;
-                    actualMineLocation.z = newPos.worldZ;
+            // Check for pickaxe
+            let pickaxe = sdk.findInventoryItem(/pickaxe/i);
+            if (!pickaxe) {
+                // Check if already equipped
+                pickaxe = sdk.findEquipmentItem(/pickaxe/i);
+                if (!pickaxe) {
+                    log('ERROR: No pickaxe in inventory or equipped!');
+                    return;
                 }
-                log(`Found ${rocks.length} rocks at (${actualMineLocation.x}, ${actualMineLocation.z})!`);
-                break;
-            }
-        }
-    }
-
-    logProgress(ctx, 'READY TO MINE');
-
-    // Cache of rock ID -> ore type (from prospecting)
-    const oreTypeCache = new Map<number, string>();
-    let consecutiveFailures = 0;
-    const MAX_FAILURES = 5;
-
-    // Main mining loop
-    while (true) {
-        const state = ctx.state();
-        if (!state?.player) {
-            await new Promise(r => setTimeout(r, 1000));
-            continue;
-        }
-
-        const currentStats = getMiningStats(ctx);
-
-        // Check for XP gain (successful mine)
-        if (currentStats.xp > lastXp) {
-            const xpGained = currentStats.xp - lastXp;
-            oresMined++;
-            lastXp = currentStats.xp;
-            consecutiveFailures = 0;  // Reset on success
-            progress();
-
-            if (oresMined % 5 === 0) {
-                logProgress(ctx, `MINED #${oresMined}`);
-            }
-        }
-
-        // Dismiss any dialogs (level-up messages)
-        if (state.dialog.isOpen) {
-            await sdk.sendClickDialog(0);
-            await new Promise(r => setTimeout(r, 300));
-            progress();
-            continue;
-        }
-
-        // Check if inventory is full - drop ore
-        if (isInventoryFull(ctx)) {
-            log('Inventory full, dropping ore...');
-            const dropped = await dropOre(ctx);
-            log(`Dropped ${dropped} ores`);
-            progress();
-            continue;
-        }
-
-        // Find rocks
-        const rocks = findRocks(ctx);
-        if (rocks.length === 0) {
-            // Return to mine center
-            const player = state.player;
-            const distFromMine = Math.sqrt(
-                Math.pow(player.worldX - actualMineLocation.x, 2) +
-                Math.pow(player.worldZ - actualMineLocation.z, 2)
-            );
-            if (distFromMine > 5) {
-                log(`No rocks nearby, returning to mine center (${distFromMine.toFixed(0)} tiles away)...`);
-                await walkSmallSteps(ctx, actualMineLocation.x, actualMineLocation.z, 8);
+                log(`Found ${pickaxe.name} already equipped`);
             } else {
-                log('No rocks nearby, waiting for respawn...');
-                await new Promise(r => setTimeout(r, 1500));
-            }
-            progress();
-            continue;
-        }
-
-        // Find a mineable rock - only prospect rocks within reasonable range
-        const MAX_PROSPECT_DIST = 8;
-        let targetRock: RockInfo | null = null;
-
-        for (const rock of rocks) {
-            // Check cache first
-            const cachedOre = oreTypeCache.get(rock.id);
-            if (cachedOre) {
-                if (cachedOre === 'empty') continue;
-                if (!canMineOre(cachedOre, currentStats.level)) {
-                    continue;  // Skip rocks we can't mine
-                }
-                targetRock = rock;
-                targetRock.oreType = cachedOre;
-                break;
-            }
-
-            // Only prospect nearby rocks (don't walk too far)
-            if (rock.distance > MAX_PROSPECT_DIST) {
-                continue;
-            }
-
-            // Unknown rock - prospect it
-            log(`Prospecting rock id=${rock.id} dist=${rock.distance}...`);
-            const oreType = await prospectRock(ctx, rock);
-            if (oreType) {
-                log(`Rock ${rock.id} = ${oreType}`);
-                oreTypeCache.set(rock.id, oreType);
-
-                if (oreType !== 'empty' && canMineOre(oreType, currentStats.level)) {
-                    targetRock = rock;
-                    targetRock.oreType = oreType;
-                    break;
+                log(`Found ${pickaxe.name} in inventory - equipping it...`);
+                const equipResult = await bot.equipItem(pickaxe);
+                if (equipResult.success) {
+                    log('Pickaxe equipped!');
+                } else {
+                    log(`Failed to equip pickaxe: ${equipResult.message} - will try mining anyway`);
                 }
             }
-            progress();
-        }
 
-        if (!targetRock) {
-            consecutiveFailures++;
-            log(`No mineable rocks found (failure ${consecutiveFailures}/${MAX_FAILURES})`);
+            // Walk to SE Varrock mine (safer than Al Kharid - no scorpions)
+            log('Walking to SE Varrock mine...');
+            await walkWithWaypoints(ctx, WAYPOINTS_TO_MINE, 'ARRIVED AT MINE');
 
-            if (consecutiveFailures >= MAX_FAILURES) {
-                log('ERROR: No mineable rocks at this location! Need copper/tin at level 1.');
-                log('Cached ore types: ' + Array.from(oreTypeCache.entries()).map(([id, ore]) => `${id}=${ore}`).join(', '));
-                return;  // Exit script - wrong mine location
+            // Check current position and look for rocks
+            const posState = ctx.sdk.getState();
+            const currentPos = posState?.player
+                ? { x: posState.player.worldX, z: posState.player.worldZ }
+                : TARGET_MINE;
+
+            // Update mine location to where we actually ended up (for drift detection)
+            const actualMineLocation = { ...currentPos };
+
+            // Look for rocks in the area - if none found, try walking around
+            let rocks = findRocks(ctx);
+            if (rocks.length === 0) {
+                log(`No rocks at (${currentPos.x}, ${currentPos.z}), searching nearby...`);
+                // Try walking to nearby locations to find rocks
+                const searchOffsets = [
+                    { x: -10, z: 0 }, { x: 10, z: 0 },
+                    { x: 0, z: -10 }, { x: 0, z: 10 },
+                    { x: -15, z: -15 }, { x: 15, z: -15 },
+                ];
+                for (const offset of searchOffsets) {
+                    const searchX = currentPos.x + offset.x;
+                    const searchZ = currentPos.z + offset.z;
+                    log(`Searching at (${searchX}, ${searchZ})...`);
+                    await walkSmallSteps(ctx, searchX, searchZ, 8);
+
+                    rocks = findRocks(ctx);
+                    if (rocks.length > 0) {
+                        const newPos = ctx.sdk.getState()?.player;
+                        if (newPos) {
+                            actualMineLocation.x = newPos.worldX;
+                            actualMineLocation.z = newPos.worldZ;
+                        }
+                        log(`Found ${rocks.length} rocks at (${actualMineLocation.x}, ${actualMineLocation.z})!`);
+                        break;
+                    }
+                }
             }
 
-            await new Promise(r => setTimeout(r, 2000));
-            progress();
-            continue;
-        }
+            logProgress(ctx, 'READY TO MINE');
 
-        // Mine the rock
-        log(`Mining ${targetRock.oreType} rock id=${targetRock.id} dist=${targetRock.distance}`);
-        const startXp = currentStats.xp;
-        const startTick = ctx.state()?.tick ?? 0;
+            // Cache of rock ID -> ore type (from prospecting)
+            const oreTypeCache = new Map<number, string>();
+            let consecutiveFailures = 0;
+            const MAX_FAILURES = 5;
 
-        const mineResult = await sdk.sendInteractLoc(
-            targetRock.x, targetRock.z, targetRock.id, targetRock.mineOpIndex
-        );
+            // Main mining loop
+            while (true) {
+                const state = ctx.sdk.getState();
+                if (!state?.player) {
+                    await new Promise(r => setTimeout(r, 1000));
+                    continue;
+                }
 
-        if (!mineResult.success) {
-            log(`Mine action failed: ${mineResult.message}`);
-            consecutiveFailures++;
-            await new Promise(r => setTimeout(r, 500));
-            continue;
-        }
+                const currentStats = getMiningStats(ctx);
 
-        // Wait for mining to complete
-        try {
-            await sdk.waitForCondition(state => {
-                // Success: XP gained
-                const miningXp = state.skills.find(s => s.name === 'Mining')?.experience ?? 0;
-                if (miningXp > startXp) return true;
+                // Check for XP gain (successful mine)
+                if (currentStats.xp > lastXp) {
+                    const xpGained = currentStats.xp - lastXp;
+                    oresMined++;
+                    lastXp = currentStats.xp;
+                    consecutiveFailures = 0;  // Reset on success
 
-                // Rock depleted
-                const rockNow = state.nearbyLocs.find(l =>
-                    l.x === targetRock!.x && l.z === targetRock!.z
-                );
-                if (!rockNow || rockNow.id !== targetRock!.id) return true;
+                    if (oresMined % 5 === 0) {
+                        logProgress(ctx, `MINED #${oresMined}`);
+                    }
+                }
 
-                // Dismiss dialogs
+                // Dismiss any dialogs (level-up messages)
                 if (state.dialog.isOpen) {
-                    sdk.sendClickDialog(0).catch(() => {});
+                    await sdk.sendClickDialog(0);
+                    await new Promise(r => setTimeout(r, 300));
+                    continue;
                 }
 
-                return false;
-            }, 8000);
+                // Check if inventory is full - drop ore
+                if (isInventoryFull(ctx)) {
+                    log('Inventory full, dropping ore...');
+                    const dropped = await dropOre(ctx);
+                    log(`Dropped ${dropped} ores`);
+                    continue;
+                }
 
-            consecutiveFailures = 0;
-        } catch {
-            consecutiveFailures++;
-            log(`Mining timeout (failure ${consecutiveFailures}/${MAX_FAILURES})`);
-        }
+                // Find rocks
+                const rocks = findRocks(ctx);
+                if (rocks.length === 0) {
+                    // Return to mine center
+                    const player = state.player;
+                    const distFromMine = Math.sqrt(
+                        Math.pow(player.worldX - actualMineLocation.x, 2) +
+                        Math.pow(player.worldZ - actualMineLocation.z, 2)
+                    );
+                    if (distFromMine > 5) {
+                        log(`No rocks nearby, returning to mine center (${distFromMine.toFixed(0)} tiles away)...`);
+                        await walkSmallSteps(ctx, actualMineLocation.x, actualMineLocation.z, 8);
+                    } else {
+                        log('No rocks nearby, waiting for respawn...');
+                        await new Promise(r => setTimeout(r, 1500));
+                    }
+                    continue;
+                }
 
-        progress();
-        await new Promise(r => setTimeout(r, 200));
+                // Find a mineable rock - only prospect rocks within reasonable range
+                const MAX_PROSPECT_DIST = 8;
+                let targetRock: RockInfo | null = null;
+
+                for (const rock of rocks) {
+                    // Check cache first
+                    const cachedOre = oreTypeCache.get(rock.id);
+                    if (cachedOre) {
+                        if (cachedOre === 'empty') continue;
+                        if (!canMineOre(cachedOre, currentStats.level)) {
+                            continue;  // Skip rocks we can't mine
+                        }
+                        targetRock = rock;
+                        targetRock.oreType = cachedOre;
+                        break;
+                    }
+
+                    // Only prospect nearby rocks (don't walk too far)
+                    if (rock.distance > MAX_PROSPECT_DIST) {
+                        continue;
+                    }
+
+                    // Unknown rock - prospect it
+                    log(`Prospecting rock id=${rock.id} dist=${rock.distance}...`);
+                    const oreType = await prospectRock(ctx, rock);
+                    if (oreType) {
+                        log(`Rock ${rock.id} = ${oreType}`);
+                        oreTypeCache.set(rock.id, oreType);
+
+                        if (oreType !== 'empty' && canMineOre(oreType, currentStats.level)) {
+                            targetRock = rock;
+                            targetRock.oreType = oreType;
+                            break;
+                        }
+                    }
+                }
+
+                if (!targetRock) {
+                    consecutiveFailures++;
+                    log(`No mineable rocks found (failure ${consecutiveFailures}/${MAX_FAILURES})`);
+
+                    if (consecutiveFailures >= MAX_FAILURES) {
+                        log('ERROR: No mineable rocks at this location! Need copper/tin at level 1.');
+                        log('Cached ore types: ' + Array.from(oreTypeCache.entries()).map(([id, ore]) => `${id}=${ore}`).join(', '));
+                        return;  // Exit script - wrong mine location
+                    }
+
+                    await new Promise(r => setTimeout(r, 2000));
+                    continue;
+                }
+
+                // Mine the rock
+                log(`Mining ${targetRock.oreType} rock id=${targetRock.id} dist=${targetRock.distance}`);
+                const startXp = currentStats.xp;
+                const startTick = ctx.sdk.getState()?.tick ?? 0;
+
+                const mineResult = await sdk.sendInteractLoc(
+                    targetRock.x, targetRock.z, targetRock.id, targetRock.mineOpIndex
+                );
+
+                if (!mineResult.success) {
+                    log(`Mine action failed: ${mineResult.message}`);
+                    consecutiveFailures++;
+                    await new Promise(r => setTimeout(r, 500));
+                    continue;
+                }
+
+                // Wait for mining to complete
+                try {
+                    await sdk.waitForCondition(state => {
+                        // Success: XP gained
+                        const miningXp = state.skills.find(s => s.name === 'Mining')?.experience ?? 0;
+                        if (miningXp > startXp) return true;
+
+                        // Rock depleted
+                        const rockNow = state.nearbyLocs.find(l =>
+                            l.x === targetRock!.x && l.z === targetRock!.z
+                        );
+                        if (!rockNow || rockNow.id !== targetRock!.id) return true;
+
+                        // Dismiss dialogs
+                        if (state.dialog.isOpen) {
+                            sdk.sendClickDialog(0).catch(() => {});
+                        }
+
+                        return false;
+                    }, 8000);
+
+                    consecutiveFailures = 0;
+                } catch {
+                    consecutiveFailures++;
+                    log(`Mining timeout (failure ${consecutiveFailures}/${MAX_FAILURES})`);
+                }
+
+                await new Promise(r => setTimeout(r, 200));
+            }
+        }, {
+            connection: { bot: session.bot, sdk: session.sdk },
+            timeout: 5 * 60 * 1000,  // 5 minutes
+        });
+    } finally {
+        await session.cleanup();
     }
-});
+}
+
+main().catch(console.error);
