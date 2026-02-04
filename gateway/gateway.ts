@@ -263,6 +263,7 @@ const SyncModule = {
                 console.log(`[Gateway] Requesting graceful disconnect for existing session: ${existingSession.clientId}`);
                 console.log(`[Gateway] New session ${clientId} will wait for old session to close`);
 
+                console.warn(`[LOGOUT DEBUG] Gateway sending save_and_disconnect to ${username} (session takeover by ${clientId})`);
                 this.sendToBot(existingSession, {
                     type: 'save_and_disconnect',
                     reason: 'New session connecting'
@@ -272,6 +273,7 @@ const SyncModule = {
                 const oldWs = existingSession.ws;
                 const timeout = setTimeout(() => {
                     // Timeout: force close old session and complete the pending takeover
+                    console.warn(`[LOGOUT DEBUG] Gateway takeover timeout (5s) for ${username} - force closing old session`);
                     console.log(`[Gateway] Takeover timeout for ${username}, force closing old session`);
                     if (oldWs && oldWs.readyState !== 3 /* CLOSED */) {
                         try { oldWs.close(); } catch {}

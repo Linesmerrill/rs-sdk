@@ -3471,6 +3471,7 @@ export class Client extends GameShell {
     }
 
     private async logout(): Promise<void> {
+        console.warn('[LOGOUT DEBUG] Client.logout() called - stack trace:', new Error().stack);
         if (this.stream) {
             this.stream.close();
         }
@@ -3751,6 +3752,7 @@ export class Client extends GameShell {
             // https://developer.chrome.com/blog/timer-throttling-in-chrome-88/
             if (performance.now() - this.idleCycles > 600_000) {
                 // 600_000ms = 10 minutes
+                console.warn('[LOGOUT DEBUG] AFK timeout triggered (10 min no input) - setting idleTimeout=250');
                 this.idleTimeout = 250;
                 // 500 ticks * 20ms = 10000ms
                 this.idleCycles = performance.now() - 10_000;
@@ -3843,7 +3845,7 @@ export class Client extends GameShell {
                 }
             } catch (e) {
                 console.error(e);
-
+                console.warn('[LOGOUT DEBUG] I/O error during packet send - calling tryReconnect()');
                 // todo: reconnect on IO error, logout on other error
                 await this.tryReconnect();
             }
@@ -3852,9 +3854,11 @@ export class Client extends GameShell {
 
     private async tryReconnect() {
         if (this.idleTimeout > 0) {
+            console.warn(`[LOGOUT DEBUG] tryReconnect() called but idleTimeout=${this.idleTimeout} > 0, logging out instead`);
             await this.logout();
             return;
         }
+        console.warn('[LOGOUT DEBUG] tryReconnect() attempting reconnection...');
 
         this.areaViewport?.bind();
         this.fontPlain12?.drawStringCenter(257, 144, 'Connection lost', Colors.BLACK);
@@ -8797,6 +8801,7 @@ export class Client extends GameShell {
             }
 
             if (this.ptype === ServerProt.LOGOUT) {
+                console.warn('[LOGOUT DEBUG] Received ServerProt.LOGOUT packet from server');
                 await this.logout();
 
                 this.ptype = -1;
@@ -9146,6 +9151,7 @@ export class Client extends GameShell {
             }
 
             console.error(`T1 - ${this.ptype},${this.psize} - ${this.ptype1},${this.ptype2}`);
+            console.warn('[LOGOUT DEBUG] T1 packet parse error - unknown packet type, logging out');
             await this.logout();
         } catch (e) {
             // todo: try reconnecting if there was an IO error
@@ -9156,7 +9162,7 @@ export class Client extends GameShell {
                 str += this.in.data[i] + ',';
             }
             console.error(str);
-
+            console.warn('[LOGOUT DEBUG] T2 packet exception - error during packet processing, logging out');
             await this.logout();
         }
 
@@ -12485,6 +12491,7 @@ export class Client extends GameShell {
             this.socialInputType = 2;
             this.socialMessage = 'Enter name of friend to delete from list';
         } else if (clientCode === ClientCode.CC_LOGOUT) {
+            console.warn('[LOGOUT DEBUG] User clicked logout button (CC_LOGOUT) - setting idleTimeout=250');
             this.idleTimeout = 250;
             return true;
         } else if (clientCode === ClientCode.CC_ADD_IGNORE) {

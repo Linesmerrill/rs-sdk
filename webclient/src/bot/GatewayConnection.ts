@@ -76,12 +76,14 @@ export class GatewayConnection {
             };
 
             this.ws.onclose = () => {
+                console.warn(`[LOGOUT DEBUG] GatewayConnection WebSocket closed - preventReconnect=${this.preventReconnect}`);
                 this.connected = false;
                 this.ws = null;
                 this.handler.onDisconnected();
 
                 // Only reconnect if not explicitly told to disconnect
                 if (!this.preventReconnect) {
+                    console.warn('[LOGOUT DEBUG] GatewayConnection scheduling auto-reconnect in 3s');
                     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
                     this.reconnectTimer = window.setTimeout(() => this.connect(), 3000);
                 } else {
@@ -153,6 +155,7 @@ export class GatewayConnection {
         } else if (msg.type === 'screenshot_request') {
             this.handler.onScreenshotRequest(msg.screenshotId);
         } else if (msg.type === 'save_and_disconnect') {
+            console.warn(`[LOGOUT DEBUG] GatewayConnection received save_and_disconnect: ${msg.reason}`);
             console.log(`[GatewayConnection] Received save_and_disconnect: ${msg.reason}`);
             // Set flag to prevent auto-reconnect before calling handler
             this.preventReconnect = true;

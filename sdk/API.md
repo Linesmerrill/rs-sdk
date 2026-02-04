@@ -11,6 +11,7 @@ These methods wait for the **effect to complete**, not just server acknowledgmen
 
 | Method | Description |
 |--------|-------------|
+| `skipTutorial(options)` | Skip tutorial by navigating dialogs and talking to tutorial NPCs. |
 | `waitForDialogClose(timeout)` | Wait for dialog to close. |
 
 ### Movement

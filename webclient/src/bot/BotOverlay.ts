@@ -105,10 +105,12 @@ export class BotOverlay implements GatewayMessageHandler {
     }
 
     onDisconnected(): void {
+        console.warn('[LOGOUT DEBUG] BotOverlay.onDisconnected() - SDK gateway connection lost');
         this.ui.logAction('disconnected', 'Disconnected from SDK gateway');
     }
 
     onSaveAndDisconnect(reason: string): void {
+        console.warn(`[LOGOUT DEBUG] Gateway save_and_disconnect received - reason: ${reason}`);
         console.log(`[BotOverlay] Save and disconnect requested: ${reason}`);
         this.ui.logAction('disconnecting', `Save and disconnect: ${reason}`);
 

@@ -242,6 +242,7 @@ export class NetworkPlayer extends Player {
     }
 
     override logout() {
+        console.warn(`[LOGOUT DEBUG] NetworkPlayer.logout() sending LOGOUT packet for ${this.username}`);
         this.writeInner(new Logout());
     }
 

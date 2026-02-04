@@ -765,6 +765,7 @@ class World {
                 }
             } catch (err) {
                 console.error(err);
+                console.warn(`[LOGOUT DEBUG] Server exception during player tick for ${player.username} - forcing logout`);
                 if (isClientConnected(player)) {
                     player.logout();
                     player.client.close();
@@ -782,10 +783,12 @@ class World {
             let force = false;
             if (this.shutdown || this.currentTick - player.lastResponse >= World.TIMEOUT_NO_RESPONSE) {
                 // world shutdown or x-logged / timed out for 60s: force logout
+                console.warn(`[LOGOUT DEBUG] Server forcing logout for ${player.username} - shutdown=${this.shutdown}, ticksSinceResponse=${this.currentTick - player.lastResponse}, timeout=${World.TIMEOUT_NO_RESPONSE}`);
                 player.loggingOut = true;
                 force = true;
             } else if (this.currentTick - player.lastConnected >= World.TIMEOUT_NO_CONNECTION) {
                 // connection lost for 30s: request idle logout
+                console.warn(`[LOGOUT DEBUG] Server requesting idle logout for ${player.username} - ticksSinceConnected=${this.currentTick - player.lastConnected}, timeout=${World.TIMEOUT_NO_CONNECTION}`);
                 player.requestIdleLogout = true;
             }
 
@@ -1667,6 +1670,7 @@ class World {
             return;
         }
 
+        console.warn(`[LOGOUT DEBUG] Server removePlayer() called for ${player.username}`);
         if (isClientConnected(player)) {
             player.logout();
             player.client.close();
@@ -1695,6 +1699,7 @@ class World {
             return;
         }
 
+        console.warn(`[LOGOUT DEBUG] Server removePlayerWithoutSave() called for ${player.username} (session takeover)`);
         if (isClientConnected(player)) {
             player.logout();
             player.client.close();
@@ -1719,6 +1724,7 @@ class World {
 
     // let the login server know this player can log in elsewhere, do not update save file
     forceLogout(player: Player, response = -1) {
+        console.warn(`[LOGOUT DEBUG] Server forceLogout() called for ${player.username} (response=${response})`);
         this.loginThread.postMessage({
             type: 'player_force_logout',
             username: player.username

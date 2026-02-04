@@ -144,6 +144,7 @@ export class BotSDK {
             };
 
             this.ws.onclose = () => {
+                console.warn(`[LOGOUT DEBUG] SDK WebSocket closed - autoReconnect=${this.config.autoReconnect}, intentionalDisconnect=${this.intentionalDisconnect}`);
                 this.connectPromise = null;
                 this.ws = null;
 
@@ -154,6 +155,7 @@ export class BotSDK {
                 this.pendingActions.clear();
 
                 if (this.config.autoReconnect && !this.intentionalDisconnect) {
+                    console.warn('[LOGOUT DEBUG] SDK scheduling auto-reconnect');
                     this.scheduleReconnect();
                 } else {
                     this.setConnectionState('disconnected');
@@ -161,6 +163,7 @@ export class BotSDK {
             };
 
             this.ws.onerror = (error) => {
+                console.warn('[LOGOUT DEBUG] SDK WebSocket error event');
                 clearTimeout(timeout);
                 reject(new Error('WebSocket error'));
             };

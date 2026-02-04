@@ -70,6 +70,7 @@ export default class ClientStream {
         if (this.closed) {
             return;
         }
+        console.warn(`[LOGOUT DEBUG] WebSocket onclose event - code=${event.code}, reason='${event.reason}', wasClean=${event.wasClean}`);
         this.close();
     };
 
@@ -77,6 +78,7 @@ export default class ClientStream {
         if (this.closed) {
             return;
         }
+        console.warn('[LOGOUT DEBUG] WebSocket onerror event - connection error occurred');
         this.ioerror = true;
         this.close();
     };
@@ -198,6 +200,7 @@ class WebSocketReader {
             }),
             new Promise<number>((_, reject) => {
                 setTimeout(() => {
+                    console.warn(`[LOGOUT DEBUG] WebSocket read timeout (20s) - closed=${this.closed}`);
                     if (this.closed) {
                         reject(new Error());
                     } else {
