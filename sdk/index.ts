@@ -455,8 +455,8 @@ export class BotSDK {
         const gatewayUrl = this.config.gatewayUrl || `ws://${this.config.host}:${this.config.port}`;
 
         if (gatewayUrl.includes('localhost') || gatewayUrl.includes('127.0.0.1')) {
-            // Local development: assume client on port 8888
-            return `http://localhost:8888/bot?bot=${encodeURIComponent(this.config.botUsername)}&password=${encodeURIComponent(this.config.password)}`;
+            // Local development: engine serves on port 80
+            return `http://localhost/bot?bot=${encodeURIComponent(this.config.botUsername)}&password=${encodeURIComponent(this.config.password)}`;
         }
 
         // Remote: assume same host with /bot path
@@ -820,8 +820,8 @@ export class BotSDK {
     }
 
     /** Click a component using INV_BUTTON packet - for components with inventory operations (smithing, crafting, etc.) */
-    async sendClickComponentWithOption(componentId: number, optionIndex: number = 1): Promise<ActionResult> {
-        return this.sendAction({ type: 'clickComponentWithOption', componentId, optionIndex, reason: 'SDK' });
+    async sendClickComponentWithOption(componentId: number, optionIndex: number = 1, slot: number = 0): Promise<ActionResult> {
+        return this.sendAction({ type: 'clickComponentWithOption', componentId, optionIndex, slot, reason: 'SDK' });
     }
 
     /** Click an interface option by index. Convenience wrapper that looks up componentId from state. */

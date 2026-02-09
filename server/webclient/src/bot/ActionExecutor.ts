@@ -107,8 +107,8 @@ export class ActionExecutor {
                 case 'clickComponentWithOption':
                     // INV_BUTTON packet - for components with inventory operations (smithing, crafting, etc.)
                     return this.wrapBool(
-                        this.client.clickInterfaceIop(action.componentId, action.optionIndex),
-                        `Clicked component ${action.componentId} option ${action.optionIndex}`,
+                        this.client.clickInterfaceIop(action.componentId, action.optionIndex, action.slot ?? 0),
+                        `Clicked component ${action.componentId} option ${action.optionIndex} slot ${action.slot ?? 0}`,
                         'Failed to click component with option'
                     );
 
