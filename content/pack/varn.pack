@@ -1,0 +1,16 @@
+0=npc_start_coord
+1=quest_chompybird_baiter
+2=rantz_attacking_chompy
+3=npc_action_delay
+4=npc_attacking_uid
+5=npc_aggressive_player
+6=npc_lastcombat
+7=npc_stunned
+8=npc_lastattack
+9=npc_poison
+10=npc_trawler_flood_status
+11=npc_trawler_fish_caught
+12=npc_int
+13=npc_int2
+14=npc_macro_event_target
+15=npc_combat_xp_multiplier
