@@ -16,8 +16,11 @@ import type {
     SDKConfig,
     ConnectionState,
     SDKConnectionMode,
-    BotStatus
+    BotStatus,
+    PrayerState,
+    PrayerName
 } from './types';
+import { PRAYER_INDICES, PRAYER_NAMES } from './types';
 import * as pathfinding from './pathfinding';
 
 interface SyncToSDKMessage {
@@ -874,6 +877,40 @@ export class BotSDK {
     /** Set combat style (0-3). */
     async sendSetCombatStyle(style: number): Promise<ActionResult> {
         return this.sendAction({ type: 'setCombatStyle', style, reason: 'SDK' });
+    }
+
+    // ============ Prayer ============
+
+    /** Toggle a prayer on or off by name or index (0-14). */
+    async sendTogglePrayer(prayer: PrayerName | number): Promise<ActionResult> {
+        const index = typeof prayer === 'number' ? prayer : PRAYER_INDICES[prayer];
+        if (index === undefined || index < 0 || index > 14) {
+            return { success: false, message: `Invalid prayer: ${prayer}` };
+        }
+        return this.sendAction({ type: 'togglePrayer', prayerIndex: index, reason: 'SDK' });
+    }
+
+    /** Get current prayer state from world state. */
+    getPrayerState(): PrayerState | null {
+        return this.state?.prayers || null;
+    }
+
+    /** Check if a specific prayer is currently active. */
+    isPrayerActive(prayer: PrayerName | number): boolean {
+        const prayerState = this.state?.prayers;
+        if (!prayerState) return false;
+        const index = typeof prayer === 'number' ? prayer : PRAYER_INDICES[prayer];
+        if (index === undefined || index < 0 || index >= prayerState.activePrayers.length) return false;
+        return prayerState.activePrayers[index];
+    }
+
+    /** Get list of all currently active prayer names. */
+    getActivePrayers(): PrayerName[] {
+        const prayerState = this.state?.prayers;
+        if (!prayerState) return [];
+        return prayerState.activePrayers
+            .map((active, i) => active ? PRAYER_NAMES[i] : null)
+            .filter((name): name is PrayerName => name !== null);
     }
 
     /** Cast spell on NPC using spell component ID. */

@@ -32,8 +32,14 @@ import type {
     BankDepositResult,
     BankWithdrawResult,
     UseItemOnLocResult,
-    UseItemOnNpcResult
+    UseItemOnNpcResult,
+    InteractLocResult,
+    InteractNpcResult,
+    PickpocketResult,
+    PrayerResult,
+    PrayerName
 } from './types';
+import { PRAYER_INDICES, PRAYER_NAMES, PRAYER_LEVELS } from './types';
 
 export class BotActions {
     private helpers: ActionHelpers;
@@ -570,7 +576,16 @@ export class BotActions {
         const invCountBefore = this.sdk.getInventory().length;
         const startTick = this.sdk.getState()?.tick || 0;
 
-        // Send pickup directly - game client handles walk-to-interact via MOVE_OPCLICK
+        // Walk to the item's exact tile first
+        const walkResult = await this.walkTo(item.x, item.z, 0);
+        if (!walkResult.success) {
+            return { success: false, message: walkResult.message, reason: 'cant_reach' };
+        }
+
+        // Wait one tick before picking up
+        await this.sdk.waitForTicks(1);
+
+        // Now send the pickup command
         const result = await this.sdk.sendPickup(item.x, item.z, item.id);
         if (!result.success) {
             return { success: false, message: result.message };
@@ -607,60 +622,82 @@ export class BotActions {
             }
 
             const pickedUp = this.sdk.getInventory().find(i => i.id === item.id);
+
+            // Wait one tick after picking up
+            await this.sdk.waitForTicks(1);
+
             return { success: true, item: pickedUp, message: `Picked up ${item.name}` };
         } catch {
             return { success: false, message: 'Timed out waiting for pickup', reason: 'timeout' };
         }
     }
 
-    /** Talk to an NPC and wait for dialog to open. */
+    /** Talk to an NPC and wait for dialog to open. Walks to the NPC first (handling doors). */
     async talkTo(target: NearbyNpc | string | RegExp): Promise<TalkResult> {
-        return this.helpers.withDoorRetry(
-            () => this._talkToOnce(target),
-            (r) => !r.success && (r.message?.includes("can't reach") || r.message?.includes('Timed out'))
-        );
-    }
+        await this.dismissBlockingUI();
 
-    private async _talkToOnce(target: NearbyNpc | string | RegExp): Promise<TalkResult> {
         const npc = this.helpers.resolveNpc(target);
         if (!npc) {
             return { success: false, message: 'NPC not found' };
         }
 
-        const startTick = this.sdk.getState()?.tick || 0;
+        // Walk to the NPC first (handles doors)
+        if (npc.distance > 2) {
+            const walkResult = await this.walkTo(npc.x, npc.z, 2);
+            if (!walkResult.success) {
+                return { success: false, message: `Cannot reach ${npc.name}: ${walkResult.message}` };
+            }
+        }
 
-        // Send talk directly - game client handles walk-to-interact via MOVE_OPCLICK
-        const result = await this.sdk.sendTalkToNpc(npc.index);
+        // Re-find the NPC after walking (it may have moved)
+        const npcPattern = typeof target === 'object' ? new RegExp(npc.name, 'i') : target;
+        const npcNow = this.helpers.resolveNpc(npcPattern);
+        if (!npcNow) {
+            return { success: false, message: `${npc.name} no longer visible` };
+        }
+
+        const startTick = this.sdk.getState()?.tick || 0;
+        let lastMoveTick = startTick;
+        let lastX = this.sdk.getState()?.player?.x ?? 0;
+        let lastZ = this.sdk.getState()?.player?.z ?? 0;
+
+        const result = await this.sdk.sendTalkToNpc(npcNow.index);
         if (!result.success) {
             return { success: false, message: result.message };
         }
 
         try {
             const finalState = await this.sdk.waitForCondition(state => {
-                // Check for "can't reach" messages
+                // Check for can't-reach messages
                 for (const msg of state.gameMessages) {
                     if (msg.tick > startTick) {
                         const text = msg.text.toLowerCase();
-                        if (text.includes("can't reach") || text.includes("cannot reach")) {
-                            return true;
-                        }
+                        if (text.includes("can't reach") || text.includes("cannot reach")) return true;
                     }
                 }
-                return state.dialog.isOpen;
-            }, 10000);
 
-            // Check if we got a "can't reach" message
-            for (const msg of finalState.gameMessages) {
-                if (msg.tick > startTick) {
-                    const text = msg.text.toLowerCase();
-                    if (text.includes("can't reach") || text.includes("cannot reach")) {
-                        return { success: false, message: `Cannot reach ${npc.name} - can't reach obstacle` };
-                    }
+                // Dialog opened — success
+                if (state.dialog.isOpen) return true;
+
+                // Track movement
+                if (state.player && (state.player.x !== lastX || state.player.z !== lastZ)) {
+                    lastX = state.player.x;
+                    lastZ = state.player.z;
+                    lastMoveTick = state.tick;
                 }
+
+                // Player idle for 2+ ticks with no dialog → give up
+                if (state.tick - lastMoveTick >= 2) return true;
+
+                return false;
+            }, 30000); // safety net only
+
+            if (this.helpers.checkCantReachMessage(startTick)) {
+                return { success: false, message: `Cannot reach ${npcNow.name}` };
             }
 
             if (finalState.dialog.isOpen) {
-                return { success: true, dialog: finalState.dialog, message: `Talking to ${npc.name}` };
+                return { success: true, dialog: finalState.dialog, message: `Talking to ${npcNow.name}` };
             }
 
             return { success: false, message: 'Dialog did not open' };
@@ -2115,6 +2152,395 @@ export class BotActions {
         }
 
         return { success: false, message: 'Smithing timed out', reason: 'timeout' };
+    }
+
+    // ============ Porcelain: Generic Interactions ============
+
+    /**
+     * Interact with a nearby location object (rock, fishing spot, furnace, etc.).
+     * Walks to the target first (handling doors), sends the interaction, then waits
+     * for an effect (animation, dialog, interface) or detects failure when the player
+     * has been idle for 2 ticks with nothing happening.
+     * @param target - NearbyLoc object or name string/regex to find
+     * @param option - Option index or name regex to match (default: 1, the first option)
+     */
+    async interactLoc(
+        target: NearbyLoc | string | RegExp,
+        option: number | string | RegExp = 1,
+    ): Promise<InteractLocResult> {
+        await this.dismissBlockingUI();
+
+        const loc = this.helpers.resolveLocation(target, /./);
+        if (!loc) {
+            return { success: false, message: `Location not found: ${target}`, reason: 'loc_not_found' };
+        }
+
+        // Resolve option index
+        let opIndex: number;
+        if (typeof option === 'number') {
+            opIndex = option;
+        } else {
+            const regex = typeof option === 'string' ? new RegExp(option, 'i') : option;
+            const match = loc.optionsWithIndex.find(o => regex.test(o.text));
+            if (!match) {
+                return { success: false, message: `No matching option on ${loc.name}`, reason: 'no_matching_option' };
+            }
+            opIndex = match.opIndex;
+        }
+
+        // Walk to the location first (handles doors)
+        if (loc.distance > 2) {
+            const walkResult = await this.walkTo(loc.x, loc.z, 2);
+            if (!walkResult.success) {
+                return { success: false, message: `Cannot reach ${loc.name}: ${walkResult.message}`, reason: 'cant_reach' };
+            }
+        }
+
+        // Re-find the location after walking (it may have changed)
+        const locPattern = typeof target === 'object' ? new RegExp(loc.name, 'i') : target;
+        const locNow = this.helpers.resolveLocation(locPattern, /./);
+        if (!locNow) {
+            return { success: false, message: `${loc.name} no longer visible`, reason: 'loc_not_found' };
+        }
+
+        const startTick = this.sdk.getState()?.tick || 0;
+        let lastMoveTick = startTick;
+        let lastX = this.sdk.getState()?.player?.x ?? 0;
+        let lastZ = this.sdk.getState()?.player?.z ?? 0;
+
+        const result = await this.sdk.sendInteractLoc(locNow.x, locNow.z, locNow.id, opIndex);
+        if (!result.success) {
+            return { success: false, message: result.message, reason: 'timeout' };
+        }
+
+        try {
+            const finalState = await this.sdk.waitForCondition(state => {
+                // Check for can't-reach messages
+                for (const msg of state.gameMessages) {
+                    if (msg.tick > startTick) {
+                        const text = msg.text.toLowerCase();
+                        if (text.includes("can't reach") || text.includes("cannot reach")) return true;
+                    }
+                }
+
+                // Success indicators
+                if (state.dialog.isOpen || state.interface?.isOpen) return true;
+                if (state.player && state.player.animId !== -1) return true;
+
+                // Track movement — if player moved, update last move tick
+                if (state.player && (state.player.x !== lastX || state.player.z !== lastZ)) {
+                    lastX = state.player.x;
+                    lastZ = state.player.z;
+                    lastMoveTick = state.tick;
+                }
+
+                // Player idle for 2+ ticks with nothing happening → give up
+                if (state.tick - lastMoveTick >= 2) return true;
+
+                return false;
+            }, 30000); // safety net only
+
+            if (this.helpers.checkCantReachMessage(startTick)) {
+                return { success: false, message: `Can't reach ${locNow.name}`, reason: 'cant_reach' };
+            }
+
+            if (finalState.dialog.isOpen || finalState.interface?.isOpen ||
+                (finalState.player && finalState.player.animId !== -1)) {
+                return { success: true, message: `Interacted with ${locNow.name}` };
+            }
+
+            return { success: false, message: `Nothing happened interacting with ${locNow.name}`, reason: 'timeout' };
+        } catch {
+            return { success: false, message: `Timed out interacting with ${locNow.name}`, reason: 'timeout' };
+        }
+    }
+
+    /**
+     * Interact with a nearby NPC using a specified option (e.g. "Trade", "Pickpocket", "Fish").
+     * Walks to the NPC first (handling doors), sends the interaction, then waits
+     * for an effect (animation, dialog, interface) or detects failure when the player
+     * has been idle for 2 ticks with nothing happening.
+     * @param target - NearbyNpc object or name string/regex to find
+     * @param option - Option index or name regex to match (default: 1, the first option)
+     */
+    async interactNpc(
+        target: NearbyNpc | string | RegExp,
+        option: number | string | RegExp = 1,
+    ): Promise<InteractNpcResult> {
+        await this.dismissBlockingUI();
+
+        const npc = this.helpers.resolveNpc(target);
+        if (!npc) {
+            return { success: false, message: `NPC not found: ${target}`, reason: 'npc_not_found' };
+        }
+
+        // Resolve option index
+        let opIndex: number;
+        if (typeof option === 'number') {
+            opIndex = option;
+        } else {
+            const regex = typeof option === 'string' ? new RegExp(option, 'i') : option;
+            const match = npc.optionsWithIndex.find(o => regex.test(o.text));
+            if (!match) {
+                return { success: false, message: `No matching option on ${npc.name}`, reason: 'no_matching_option' };
+            }
+            opIndex = match.opIndex;
+        }
+
+        // Walk to the NPC first (handles doors)
+        if (npc.distance > 2) {
+            const walkResult = await this.walkTo(npc.x, npc.z, 2);
+            if (!walkResult.success) {
+                return { success: false, message: `Cannot reach ${npc.name}: ${walkResult.message}`, reason: 'cant_reach' };
+            }
+        }
+
+        // Re-find the NPC after walking (it may have moved)
+        const npcPattern = typeof target === 'object' ? new RegExp(npc.name, 'i') : target;
+        const npcNow = this.helpers.resolveNpc(npcPattern);
+        if (!npcNow) {
+            return { success: false, message: `${npc.name} no longer visible`, reason: 'npc_not_found' };
+        }
+
+        const startTick = this.sdk.getState()?.tick || 0;
+        let lastMoveTick = startTick;
+        let lastX = this.sdk.getState()?.player?.x ?? 0;
+        let lastZ = this.sdk.getState()?.player?.z ?? 0;
+
+        const result = await this.sdk.sendInteractNpc(npcNow.index, opIndex);
+        if (!result.success) {
+            return { success: false, message: result.message, reason: 'timeout' };
+        }
+
+        try {
+            const finalState = await this.sdk.waitForCondition(state => {
+                // Check for can't-reach messages
+                for (const msg of state.gameMessages) {
+                    if (msg.tick > startTick) {
+                        const text = msg.text.toLowerCase();
+                        if (text.includes("can't reach") || text.includes("cannot reach")) return true;
+                    }
+                }
+
+                // Success indicators
+                if (state.dialog.isOpen || state.interface?.isOpen) return true;
+                if (state.player && state.player.animId !== -1) return true;
+
+                // Track movement — if player moved, update last move tick
+                if (state.player && (state.player.x !== lastX || state.player.z !== lastZ)) {
+                    lastX = state.player.x;
+                    lastZ = state.player.z;
+                    lastMoveTick = state.tick;
+                }
+
+                // Player idle for 2+ ticks with nothing happening → give up
+                if (state.tick - lastMoveTick >= 2) return true;
+
+                return false;
+            }, 30000); // safety net only
+
+            if (this.helpers.checkCantReachMessage(startTick)) {
+                return { success: false, message: `Can't reach ${npcNow.name}`, reason: 'cant_reach' };
+            }
+
+            if (finalState.dialog.isOpen || finalState.interface?.isOpen ||
+                (finalState.player && finalState.player.animId !== -1)) {
+                return { success: true, message: `Interacted with ${npcNow.name}` };
+            }
+
+            return { success: false, message: `Nothing happened interacting with ${npcNow.name}`, reason: 'timeout' };
+        } catch {
+            return { success: false, message: `Timed out interacting with ${npcNow.name}`, reason: 'timeout' };
+        }
+    }
+
+    // ============ Porcelain: Thieving ============
+
+    /** Pickpocket an NPC. Handles door retrying if path is blocked. */
+    async pickpocketNpc(target: NearbyNpc | string | RegExp): Promise<PickpocketResult> {
+        return this.helpers.withDoorRetry(
+            () => this._pickpocketNpcOnce(target),
+            (r) => r.reason === 'cant_reach' || r.reason === 'timeout'
+        );
+    }
+
+    private async _pickpocketNpcOnce(target: NearbyNpc | string | RegExp): Promise<PickpocketResult> {
+        const npc = this.helpers.resolveNpc(target);
+        if (!npc) {
+            return { success: false, message: `NPC not found: ${target}`, reason: 'npc_not_found' };
+        }
+
+        const pickOpt = npc.optionsWithIndex.find(o => /pickpocket/i.test(o.text));
+        if (!pickOpt) {
+            return { success: false, message: `No pickpocket option on ${npc.name}`, reason: 'no_pickpocket_option' };
+        }
+
+        const thievingBefore = this.sdk.getSkill('Thieving')?.experience || 0;
+        const startTick = this.sdk.getState()?.tick || 0;
+
+        const result = await this.sdk.sendInteractNpc(npc.index, pickOpt.opIndex);
+        if (!result.success) {
+            return { success: false, message: result.message, reason: 'timeout' };
+        }
+
+        try {
+            const finalState = await this.sdk.waitForCondition(state => {
+                // Check for XP gain
+                const thievingNow = state.skills.find(s => s.name === 'Thieving')?.experience || 0;
+                if (thievingNow > thievingBefore) return true;
+
+                // Check game messages for stun/catch or can't reach
+                for (const msg of state.gameMessages) {
+                    if (msg.tick > startTick) {
+                        const text = msg.text.toLowerCase();
+                        if (text.includes('stunned') || text.includes('caught') || text.includes('stun')) return true;
+                        if (text.includes("can't reach") || text.includes('cannot reach')) return true;
+                    }
+                }
+
+                return false;
+            }, 10000);
+
+            // Check what happened
+            for (const msg of finalState.gameMessages) {
+                if (msg.tick > startTick) {
+                    const text = msg.text.toLowerCase();
+                    if (text.includes("can't reach") || text.includes('cannot reach')) {
+                        return { success: false, message: `Can't reach ${npc.name}`, reason: 'cant_reach' };
+                    }
+                    if (text.includes('stunned') || text.includes('caught') || text.includes('stun')) {
+                        return { success: false, message: `Stunned while pickpocketing ${npc.name}`, reason: 'stunned' };
+                    }
+                }
+            }
+
+            const thievingAfter = this.sdk.getSkill('Thieving')?.experience || 0;
+            const xpGained = thievingAfter - thievingBefore;
+            if (xpGained > 0) {
+                return { success: true, message: `Pickpocketed ${npc.name}`, xpGained };
+            }
+
+            return { success: false, message: `Pickpocket failed on ${npc.name}`, reason: 'timeout' };
+        } catch {
+            return { success: false, message: `Timed out pickpocketing ${npc.name}`, reason: 'timeout' };
+        }
+    }
+
+    // ============ Porcelain: Prayer Actions ============
+
+    /**
+     * Activate a prayer by name or index.
+     * Checks preconditions (level, prayer points, not already active) before toggling.
+     */
+    async activatePrayer(prayer: PrayerName | number): Promise<PrayerResult> {
+        const index = typeof prayer === 'number' ? prayer : PRAYER_INDICES[prayer];
+        if (index === undefined || index < 0 || index > 14) {
+            return { success: false, message: `Invalid prayer: ${prayer}`, reason: 'invalid_prayer' };
+        }
+
+        const prayerName = PRAYER_NAMES[index];
+        const prayerState = this.sdk.getPrayerState();
+        if (!prayerState) {
+            return { success: false, message: 'No prayer state available' };
+        }
+
+        // Check if already active
+        if (prayerState.activePrayers[index]) {
+            return { success: true, message: `${prayerName} is already active`, reason: 'already_active' };
+        }
+
+        // Check prayer points
+        if (prayerState.prayerPoints <= 0) {
+            return { success: false, message: 'No prayer points remaining', reason: 'no_prayer_points' };
+        }
+
+        // Check prayer level
+        const requiredLevel = PRAYER_LEVELS[index] ?? 1;
+        if (prayerState.prayerLevel < requiredLevel) {
+            return { success: false, message: `Need prayer level ${requiredLevel} for ${prayerName} (have ${prayerState.prayerLevel})`, reason: 'level_too_low' };
+        }
+
+        // Send toggle
+        const result = await this.sdk.sendTogglePrayer(index);
+        if (!result.success) {
+            return { success: false, message: result.message };
+        }
+
+        // Wait for prayer to become active
+        try {
+            await this.sdk.waitForCondition(state => {
+                return state.prayers.activePrayers[index] === true;
+            }, 5000);
+            return { success: true, message: `Activated ${prayerName}` };
+        } catch {
+            return { success: false, message: `Timeout waiting for ${prayerName} to activate`, reason: 'timeout' };
+        }
+    }
+
+    /**
+     * Deactivate a prayer by name or index.
+     * Checks if the prayer is actually active before toggling.
+     */
+    async deactivatePrayer(prayer: PrayerName | number): Promise<PrayerResult> {
+        const index = typeof prayer === 'number' ? prayer : PRAYER_INDICES[prayer];
+        if (index === undefined || index < 0 || index > 14) {
+            return { success: false, message: `Invalid prayer: ${prayer}`, reason: 'invalid_prayer' };
+        }
+
+        const prayerName = PRAYER_NAMES[index];
+        const prayerState = this.sdk.getPrayerState();
+        if (!prayerState) {
+            return { success: false, message: 'No prayer state available' };
+        }
+
+        // Check if already inactive
+        if (!prayerState.activePrayers[index]) {
+            return { success: true, message: `${prayerName} is already inactive`, reason: 'already_inactive' };
+        }
+
+        // Send toggle
+        const result = await this.sdk.sendTogglePrayer(index);
+        if (!result.success) {
+            return { success: false, message: result.message };
+        }
+
+        // Wait for prayer to become inactive
+        try {
+            await this.sdk.waitForCondition(state => {
+                return state.prayers.activePrayers[index] === false;
+            }, 5000);
+            return { success: true, message: `Deactivated ${prayerName}` };
+        } catch {
+            return { success: false, message: `Timeout waiting for ${prayerName} to deactivate`, reason: 'timeout' };
+        }
+    }
+
+    /**
+     * Deactivate all currently active prayers.
+     * Toggles each active prayer off one by one.
+     */
+    async deactivateAllPrayers(): Promise<PrayerResult> {
+        const prayerState = this.sdk.getPrayerState();
+        if (!prayerState) {
+            return { success: false, message: 'No prayer state available' };
+        }
+
+        const activePrayers = prayerState.activePrayers
+            .map((active, i) => active ? i : -1)
+            .filter(i => i !== -1);
+
+        if (activePrayers.length === 0) {
+            return { success: true, message: 'No prayers are active' };
+        }
+
+        for (const index of activePrayers) {
+            const result = await this.deactivatePrayer(index);
+            if (!result.success && result.reason !== 'already_inactive') {
+                return { success: false, message: `Failed to deactivate ${PRAYER_NAMES[index]}: ${result.message}` };
+            }
+        }
+
+        return { success: true, message: `Deactivated ${activePrayers.length} prayer(s)` };
     }
 }
 
