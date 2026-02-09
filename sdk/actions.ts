@@ -1898,42 +1898,60 @@ export class BotActions {
     // ============ Smithing ============
 
     /**
-     * Smithing interface component IDs for bronze items.
-     * The smithing interface (994) uses these component IDs for each item type.
+     * Smithing interface layout: 5 columns (component IDs 1119-1123), each with up to 5 item slots.
+     * Maps product name -> { componentId, slot } for the INV_BUTTON packet.
+     *
+     * Column layout (same for all metal types):
+     *   column1 (1119): dagger(0), sword(1), scimitar(2), longsword(3), 2h sword(4)
+     *   column2 (1120): axe(0), mace(1), warhammer(2), battleaxe(3)
+     *   column3 (1121): chainbody(0), platelegs(1), plateskirt(2), platebody(3)
+     *   column4 (1122): med helm(0), full helm(1), sq shield(2), kiteshield(3)
+     *   column5 (1123): dart tip(0), arrowheads(1), knife(2), wire/nails(3)
      */
-    private static readonly SMITHING_COMPONENTS: Record<string, number> = {
-        'dagger': 1119,
-        'axe': 1120,
-        'mace': 1121,
-        'med helm': 1122,
-        'medium helm': 1122,
-        'bolts': 1123,      // Makes 10
-        'sword': 1124,
-        'scimitar': 1125,
-        'longsword': 1126,
-        'long sword': 1126,
-        'full helm': 1127,
-        'throwing knives': 1128,
-        'knives': 1128,
-        'sq shield': 1129,
-        'square shield': 1129,
-        'warhammer': 1130,
-        'war hammer': 1130,
-        'battleaxe': 1131,
-        'battle axe': 1131,
-        'chainbody': 1132,
-        'chain body': 1132,
-        'kiteshield': 1133,
-        'kite shield': 1133,
-        'claws': 1134,
-        '2h sword': 1135,
-        'two-handed sword': 1135,
-        'plateskirt': 1136,
-        'plate skirt': 1136,
-        'platelegs': 1137,
-        'plate legs': 1137,
-        'platebody': 1138,
-        'plate body': 1138,
+    private static readonly SMITHING_COMPONENTS: Record<string, { componentId: number; slot: number }> = {
+        // Column 1 - bladed weapons
+        'dagger': { componentId: 1119, slot: 0 },
+        'sword': { componentId: 1119, slot: 1 },
+        'scimitar': { componentId: 1119, slot: 2 },
+        'longsword': { componentId: 1119, slot: 3 },
+        'long sword': { componentId: 1119, slot: 3 },
+        '2h sword': { componentId: 1119, slot: 4 },
+        'two-handed sword': { componentId: 1119, slot: 4 },
+        // Column 2 - blunt/axes
+        'axe': { componentId: 1120, slot: 0 },
+        'mace': { componentId: 1120, slot: 1 },
+        'warhammer': { componentId: 1120, slot: 2 },
+        'war hammer': { componentId: 1120, slot: 2 },
+        'battleaxe': { componentId: 1120, slot: 3 },
+        'battle axe': { componentId: 1120, slot: 3 },
+        // Column 3 - armor
+        'chainbody': { componentId: 1121, slot: 0 },
+        'chain body': { componentId: 1121, slot: 0 },
+        'platelegs': { componentId: 1121, slot: 1 },
+        'plate legs': { componentId: 1121, slot: 1 },
+        'plateskirt': { componentId: 1121, slot: 2 },
+        'plate skirt': { componentId: 1121, slot: 2 },
+        'platebody': { componentId: 1121, slot: 3 },
+        'plate body': { componentId: 1121, slot: 3 },
+        // Column 4 - helms/shields
+        'med helm': { componentId: 1122, slot: 0 },
+        'medium helm': { componentId: 1122, slot: 0 },
+        'full helm': { componentId: 1122, slot: 1 },
+        'sq shield': { componentId: 1122, slot: 2 },
+        'square shield': { componentId: 1122, slot: 2 },
+        'kiteshield': { componentId: 1122, slot: 3 },
+        'kite shield': { componentId: 1122, slot: 3 },
+        // Column 5 - ranged/misc
+        'dart tip': { componentId: 1123, slot: 0 },
+        'dart tips': { componentId: 1123, slot: 0 },
+        'arrowheads': { componentId: 1123, slot: 1 },
+        'arrow heads': { componentId: 1123, slot: 1 },
+        'knife': { componentId: 1123, slot: 2 },
+        'knives': { componentId: 1123, slot: 2 },
+        'throwing knives': { componentId: 1123, slot: 2 },
+        'wire': { componentId: 1123, slot: 3 },
+        'nails': { componentId: 1123, slot: 3 },
+        'studs': { componentId: 1123, slot: 3 },
     };
 
     /**
@@ -1978,15 +1996,17 @@ export class BotActions {
             return { success: false, message: 'No anvil nearby', reason: 'no_anvil' };
         }
 
-        // Determine component ID
+        // Determine component ID and slot
         let componentId: number;
+        let slot: number = 0;
         if (typeof product === 'number') {
             componentId = product;
         } else {
             const key = product.toLowerCase();
             const directMatch = BotActions.SMITHING_COMPONENTS[key];
             if (directMatch) {
-                componentId = directMatch;
+                componentId = directMatch.componentId;
+                slot = directMatch.slot;
             } else {
                 // Try partial match
                 const matchingKey = Object.keys(BotActions.SMITHING_COMPONENTS).find(k =>
@@ -1994,7 +2014,8 @@ export class BotActions {
                 );
                 const partialMatch = matchingKey ? BotActions.SMITHING_COMPONENTS[matchingKey] : undefined;
                 if (partialMatch) {
-                    componentId = partialMatch;
+                    componentId = partialMatch.componentId;
+                    slot = partialMatch.slot;
                 } else {
                     return { success: false, message: `Unknown smithing product: ${product}`, reason: 'level_too_low' };
                 }
@@ -2020,8 +2041,8 @@ export class BotActions {
             return { success: false, message: 'Smithing interface did not open', reason: 'interface_not_opened' };
         }
 
-        // Click the smithing component (uses INV_BUTTON)
-        const clickResult = await this.sdk.sendClickComponentWithOption(componentId, 1);
+        // Click the smithing component (uses INV_BUTTON with correct slot)
+        const clickResult = await this.sdk.sendClickComponentWithOption(componentId, 1, slot);
         if (!clickResult.success) {
             return { success: false, message: 'Failed to click smithing option', reason: 'interface_not_opened' };
         }
